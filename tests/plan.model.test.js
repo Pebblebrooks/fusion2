@@ -73,3 +73,38 @@ test('edge profiles do not break: 16, 54, 55, 64, 70, 90, zero balances', () => 
     for (const k of ['payoutToday', 'incomeToday', 'score', 'frsCoverage', 'maCoverage']) assert.ok(Number.isFinite(p[k]) && p[k] >= 0, `${birthYear} ${k}=${p[k]}`);
   }
 });
+
+// ── Workspace and Adviser ──────────────────────────────────────────────────
+import { stressTests, yearRows, toCsv, summarise } from '../src/model/plan.js';
+import { tierForGateCode, tierForUpgradeCode, GATE_PASSWORDS, TIER_PASSWORDS } from '../src/entitlements/gate.js';
+
+test('stress tests change one assumption each and never raise income by making things worse', () => {
+  const { base, cases } = stressTests({}, NOW);
+  assert.ok(cases.length >= 4);
+  for (const c of cases.filter((x) => x.key !== 'sums')) assert.ok(c.delta <= 0, `${c.key} ${c.delta}`);
+  assert.equal(cases.find((c) => c.key === 'pay').incomeToday - base.incomeToday, cases.find((c) => c.key === 'pay').delta);
+  assert.ok(!stressTests({ work: 'none', salary: 0 }, NOW).cases.some((c) => c.key === 'stop' || c.key === 'bonus'));
+});
+
+test('assumptions feed the engine and standard settings leave results unchanged', () => {
+  assert.deepEqual(summarise(buildPlan({ inflation: 2, realPayGrowth: 0, sumGrowth: 3 }, NOW)), summarise(buildPlan({}, NOW)));
+  assert.ok(buildPlan({ realPayGrowth: 2 }, NOW).incomeToday > buildPlan({}, NOW).incomeToday);
+  assert.equal(toEngineInputs({ inflation: 3, realPayGrowth: 1 }, NOW).salaryGrowthRate, 4);
+});
+
+test('year table and CSV line up', () => {
+  const rows = yearRows(buildPlan({}, NOW));
+  assert.equal(rows[0].age, 35);
+  assert.equal(rows[0].year, 2027);
+  const csv = toCsv(rows).split('\n');
+  assert.equal(csv.length, rows.length + 1);
+  assert.equal(csv[1].split(',').length, 6);
+});
+
+test('access and upgrade codes map to the right plans', () => {
+  assert.equal(tierForGateCode(GATE_PASSWORDS.beta), 'lite');
+  assert.equal(tierForGateCode(GATE_PASSWORDS.admin), 'pro');
+  assert.equal(tierForUpgradeCode(TIER_PASSWORDS.plus), 'plus');
+  assert.equal(tierForUpgradeCode(TIER_PASSWORDS.pro), 'pro');
+  assert.equal(tierForUpgradeCode('nope'), null);
+});

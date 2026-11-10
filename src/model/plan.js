@@ -38,6 +38,10 @@ export const DEFAULT_ANSWERS = {
   topUpYearly: 0,          // cash top-up to SA / RA
   oaToSaYearly: 0,         // OA → SA transfer (below 55)
   stopWorkAge: 65,
+  // Assumptions (Workspace and Adviser can change these)
+  inflation: 2,            // % a year
+  realPayGrowth: 0,        // % a year above inflation
+  sumGrowth: 3,            // % a year growth in retirement sums after 2027
 };
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -77,7 +81,9 @@ export const toEngineInputs = (answers, now = new Date()) => {
     salaryGross: salary, salaryBonus: Math.round(salary * num(a.bonusMonths)),
     empOaCont: c.oa, empSaCont: c.sa, empMaCont: c.ma,
     // Pay keeps pace with prices, so results in today's dollars are not understated.
-    salaryGrowthRate: DEFAULT_INPUTS.inflationRate,
+    inflationRate: clamp(num(a.inflation, 2), 0, 6),
+    salaryGrowthRate: Math.max(0, clamp(num(a.inflation, 2), 0, 6) + clamp(num(a.realPayGrowth), -6, 5)),
+    retirementSumGrowth: clamp(num(a.sumGrowth, 3), 0, 6),
     oaBalance: num(a.oa), saBalance: num(a.sa), maBalance: num(a.ma),
     housingOutflow: Math.round(num(a.housingMonthly) * 12), housingStopAge: clamp(num(a.housingEndAge, 55), age, 95),
     targetMonthlyIncome: num(a.targetIncome), payoutAge: clamp(num(a.payoutAge, 65), 65, 70),
@@ -263,3 +269,41 @@ export const findMoves = (answers, now = new Date(), limit = 3) => {
   }
   return { base, moves: out.sort((x, y) => y.gain - x.gain).slice(0, limit) };
 };
+
+/** The few figures used to compare one plan with another. */
+export const summarise = (plan) => ({
+  incomeToday: plan.incomeToday, payoutToday: plan.payoutToday, oaMonthlyToday: plan.oaMonthlyToday,
+  gapToday: plan.gapToday, coverage: plan.coverage, frsCoverage: plan.frsCoverage, score: plan.score, label: plan.label,
+  payoutAge: plan.payoutAge, payout: plan.payout,
+});
+
+/**
+ * Stress test: the plan re-run with one assumption made worse each time.
+ * Deterministic, so the same plan always gives the same answers.
+ */
+export const stressTests = (answers, now = new Date()) => {
+  const a = { ...DEFAULT_ANSWERS, ...answers };
+  const base = buildPlan(a, now);
+  const cases = [
+    ['prices', `Prices rise ${num(a.inflation) + 1}% a year instead of ${num(a.inflation)}%`, { inflation: num(a.inflation) + 1 }],
+    ['pay', 'Your pay never rises again', { realPayGrowth: -num(a.inflation) }],
+    ['sums', `Retirement sums rise ${num(a.sumGrowth) + 1}% a year instead of ${num(a.sumGrowth)}%`, { sumGrowth: num(a.sumGrowth) + 1 }],
+  ];
+  if (a.work !== 'none' && num(a.stopWorkAge) - 5 > base.age) cases.push(['stop', `You stop work at ${num(a.stopWorkAge) - 5}, five years early`, { stopWorkAge: num(a.stopWorkAge) - 5 }]);
+  if (a.work === 'employee' && num(a.bonusMonths) > 0) cases.push(['bonus', 'No more bonuses', { bonusMonths: 0 }]);
+  return {
+    base,
+    cases: cases.map(([key, label, change]) => {
+      const p = buildPlan({ ...a, ...change }, now);
+      return { key, label, incomeToday: p.incomeToday, payoutToday: p.payoutToday, delta: p.incomeToday - base.incomeToday, gapToday: p.gapToday, score: p.score };
+    }),
+  };
+};
+
+/** Year-by-year balances (future dollars, at the end of each age year) for the table and CSV download. */
+export const yearRows = (plan) => plan.rows.filter((r) => r.age <= 95).map((r) => ({
+  age: r.age, year: plan.answers.birthYear + r.age + 1,
+  oa: Math.round(r.oa), retire: Math.round((r.sa || 0) + (r.ra || 0)), ma: Math.round(r.ma), total: Math.round(r.total),
+}));
+export const toCsv = (rows) => ['Age,Year,Ordinary Account,Special / Retirement Account,MediSave,Total',
+  ...rows.map((r) => [r.age, r.year, r.oa, r.retire, r.ma, r.total].join(','))].join('\n');

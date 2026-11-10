@@ -5,6 +5,10 @@ Cloudflare Worker.
 
 - Website: `/` (home), `/pricing/`, `/advisers/`, `/learn/`, `/faq/`, `/contact/`, `/privacy/`, `/terms/`
 - Planner (new, Guided): `/app/` — setup, My Plan, Moves, Details, Profile. Saves the plan on the device.
+  - Guided: Plan, Moves, Details, Profile.
+  - Workspace adds: Compare (up to 4 saved scenarios), stress test, year-by-year table with CSV download, own assumptions, printable report.
+  - Adviser adds: client files kept on the device (with backup and restore), firm name and notes on client reports.
+  - Logo: `public/seal.png`, the same seal as the classic planner.
 - Classic planner (all tabs): `/app/classic/` — opens from the new planner with the same plan loaded. Old share links (`/app/?p=…`) are forwarded here.
 - Checkout: `/checkout/` (records plan requests until online payment is switched on)
 

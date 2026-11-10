@@ -134,6 +134,7 @@ p { margin: 0; }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
 .brand:hover { color: var(--ink); }
 .brand-mark { width: 32px; height: 32px; border-radius: 9px; background: var(--brand-solid); color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 17px; flex-shrink: 0; }
+.brand-mark.seal { background: #FFFFFF; padding: 2px; border: 1px solid var(--border-strong); object-fit: contain; }  /* same seal as the classic planner */
 .brand-name { font-family: var(--font-display); font-weight: 700; font-size: 18px; white-space: nowrap; }
 .brand-beta { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 999px; background: var(--warn-tint); color: var(--warn); }
 .site-nav { display: flex; gap: 2px; }

@@ -20,3 +20,7 @@ export const TIER_PASSWORDS = {
 /** Returns the tier a code unlocks at the gate ('pro' | 'lite'), or null. */
 export const tierForGateCode = (code) =>
   code === GATE_PASSWORDS.admin ? 'pro' : code === GATE_PASSWORDS.beta ? 'lite' : null;
+
+/** Returns the tier an upgrade code unlocks ('plus' | 'pro'), or null. */
+export const tierForUpgradeCode = (code) =>
+  code === TIER_PASSWORDS.pro || code === GATE_PASSWORDS.admin ? 'pro' : code === TIER_PASSWORDS.plus ? 'plus' : null;

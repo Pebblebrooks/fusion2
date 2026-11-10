@@ -9,11 +9,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { buildPlan, findMoves, DEFAULT_ANSWERS, ageFrom, RSTU_RELIEF_CAP } from '../model/plan.js';
 import { tierForGateCode } from '../entitlements/gate.js';
 import { tierName } from '../entitlements/tiers.js';
-import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink } from './storage.js';
+import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink, loadBook, saveBook, newId } from './storage.js';
 import SavingsChart from './Chart.jsx';
+import { money, pct, Help, MoneyField, Choice, Slider } from './ui.jsx';
+import { CompareView, WorkspaceDetails, Assumptions, ClientsView, ReportView, UpgradeCode } from './Workspace.jsx';
 
-const money = (v) => `S$${Math.round(Number(v) || 0).toLocaleString('en-SG')}`;
-const pct = (v) => `${Math.round(v * 100)}%`;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const LIFE_PLANS = [
   { id: 'std', name: 'Standard', note: 'Level payouts for life. The default.' },
@@ -21,50 +21,6 @@ const LIFE_PLANS = [
   { id: 'bas', name: 'Basic', note: 'Lower payouts that fall later in life; leaves more for your family.' },
 ];
 const WHAT_IF_KEYS = ['topUpYearly', 'oaToSaYearly', 'payoutAge', 'stopWorkAge', 'housingMonthly'];
-
-/* ── Small pieces ─────────────────────────────────────────────────────────── */
-const Help = ({ to, children }) => (
-  <a className="help" href={`/learn/#${to}`} target="_blank" rel="noopener">{children}<span aria-hidden="true"> ↗</span></a>
-);
-
-function MoneyField({ label, hint, value, onChange, suffix, id }) {
-  return (
-    <label className="fld" htmlFor={id}>
-      <span className="field-label">{label}</span>
-      <span className="input-wrap">
-        <span className="prefix" aria-hidden="true">S$</span>
-        <input id={id} inputMode="numeric" autoComplete="off" value={value ? Number(value).toLocaleString('en-SG') : ''} placeholder="0"
-          onChange={(e) => onChange(Math.min(99999999, Number(e.target.value.replace(/[^\d]/g, '')) || 0))} />
-        {suffix && <span className="suffix">{suffix}</span>}
-      </span>
-      {hint && <span className="field-hint">{hint}</span>}
-    </label>
-  );
-}
-
-function Choice({ label, value, onChange, options, name }) {
-  return (
-    <fieldset className="fld choice">
-      <legend className="field-label">{label}</legend>
-      <div className="seg">
-        {options.map(([v, text]) => (
-          <label key={String(v)} className={value === v ? 'on' : ''}>
-            <input type="radio" name={name} checked={value === v} onChange={() => onChange(v)} />{text}
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
-function Slider({ label, value, min, max, step, onChange, format, id }) {
-  return (
-    <label className="fld slider" htmlFor={id}>
-      <span className="field-label">{label}<output>{format(value)}</output></span>
-      <input id={id} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-    </label>
-  );
-}
 
 /* ── The questions (used by setup and by Profile) ─────────────────────────── */
 function Questions({ step, a, set, age }) {
@@ -109,7 +65,7 @@ function Questions({ step, a, set, age }) {
   </>);
 }
 const STEPS = [
-  ['About you', 'Your age and sex set your contribution rates and CPF LIFE payouts.'],
+  ['About you', 'Age and sex set contribution rates and CPF LIFE payouts.'],
   ['Your work', 'This sets how much goes into CPF each month.'],
   ['Your CPF today', 'Your three account balances.'],
   ['Your home', 'Money used for a home loan is not there for retirement.'],
@@ -127,7 +83,7 @@ function Gate({ onPass }) {
   return (
     <main className="gate">
       <form className="panel gate-card" onSubmit={submit}>
-        <span className="brand-mark" aria-hidden="true">富</span>
+        <img className="brand-mark seal" src="/seal.png" alt="" width="32" height="32" />
         <h1>Fusion planner</h1>
         <p className="muted">Private beta. Enter the access code from your invitation.</p>
         <label className="fld" htmlFor="gate-code"><span className="field-label">Access code</span>
@@ -141,7 +97,7 @@ function Gate({ onPass }) {
 }
 
 /* ── Setup ────────────────────────────────────────────────────────────────── */
-function Setup({ answers, onDone }) {
+function Setup({ answers, onDone, title }) {
   const [a, setA] = useState(answers), [step, setStep] = useState(0);
   const set = (patch) => setA((p) => ({ ...p, ...patch }));
   const { age } = ageFrom(a.birthYear, a.birthMonth);
@@ -157,7 +113,7 @@ function Setup({ answers, onDone }) {
         <ol className="progress" aria-label="Setup progress">
           {STEPS.map(([t], i) => <li key={t} className={i === step ? 'now' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined}><span className="visually-hidden">{t}</span></li>)}
         </ol>
-        <p className="eyebrow">Step {step + 1} of {STEPS.length}</p>
+        <p className="eyebrow">{title ? `${title} · ` : ''}Step {step + 1} of {STEPS.length}</p>
         <h1>{STEPS[step][0]}</h1>
         <p className="muted">{STEPS[step][1]}</p>
         <div className="fields"><Questions step={step} a={a} set={set} age={age} /></div>
@@ -301,7 +257,7 @@ function MovesView({ base, plan, moves, tried, setTried, answers }) {
 }
 
 /* ── Details ──────────────────────────────────────────────────────────────── */
-function DetailsView({ plan, setAnswer }) {
+function DetailsView({ plan, setAnswer, tier, onReport }) {
   const a = plan.assumptions, before55 = plan.age < 55, started = plan.age >= plan.payoutAge;
   return (
     <>
@@ -340,6 +296,8 @@ function DetailsView({ plan, setAnswer }) {
         </div>
       </section>
 
+      <WorkspaceDetails plan={plan} tier={tier} onReport={onReport} />
+
       <section className="panel assumptions">
         <h2>What this assumes</h2>
         <ul>
@@ -357,7 +315,7 @@ function DetailsView({ plan, setAnswer }) {
 }
 
 /* ── Profile ──────────────────────────────────────────────────────────────── */
-function ProfileView({ answers, setAnswer, onRestart, tier }) {
+function ProfileView({ answers, setAnswer, onRestart, tier, onTier }) {
   const { age } = ageFrom(answers.birthYear, answers.birthMonth);
   return (
     <>
@@ -370,33 +328,47 @@ function ProfileView({ answers, setAnswer, onRestart, tier }) {
           <section className="panel" key={title}><h2>{title}</h2><div className="fields"><Questions step={i} a={answers} set={setAnswer} age={age} /></div></section>
         ))}
       </div>
+      <Assumptions answers={answers} setAnswer={setAnswer} tier={tier} />
       <section className="panel more">
         <h2>Need more detail?</h2>
-        <p className="muted">The classic planner has every table and chart: property, insurance, family, tax and stress tests. It opens with this plan loaded. You are on the {tierName(tier)} plan.</p>
+        <p className="muted">The classic planner has every table and chart: property, insurance, family, tax and stress tests. It opens in a new tab with this plan loaded.</p>
         <div className="btn-row">
-          <a className="btn btn-secondary" href={classicLink(answers)}>Open in classic planner</a>
+          <a className="btn btn-secondary" href={classicLink(answers)} target="_blank" rel="noopener">Open in classic planner ↗</a>
           <button type="button" className="btn btn-ghost danger" onClick={onRestart}>Erase and start again</button>
         </div>
         <p className="small muted">Saved on this device only. Clearing your browser data removes it.</p>
       </section>
+      <UpgradeCode tier={tier} onTier={onTier} />
     </>
   );
 }
 
 /* ── Shell ────────────────────────────────────────────────────────────────── */
-const TABS = [['plan', 'Plan'], ['moves', 'Moves'], ['details', 'Details'], ['profile', 'Profile']];
+const TABS = [['plan', 'Plan'], ['moves', 'Moves'], ['details', 'Details'], ['compare', 'Compare'], ['profile', 'Profile']];
 const ICONS = {
-  plan: 'M3 12l9-8 9 8M5 10v10h14V10', moves: 'M4 18l6-6 4 4 6-8M14 8h6v6', details: 'M4 20V10M10 20V4M16 20v-8M22 20H2', profile: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0',
+  plan: 'M3 12l9-8 9 8M5 10v10h14V10', moves: 'M4 18l6-6 4 4 6-8M14 8h6v6', details: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
+  compare: 'M4 5h6v14H4zM14 5h6v14h-6z', profile: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0',
 };
+const EMPTY = { answers: DEFAULT_ANSWERS, tried: {}, done: false, scenarios: [] };
 
 export default function GuidedApp() {
   const [tier, setTier] = useState(currentTier);
-  const [state, setState] = useState(() => loadPlan() || { answers: DEFAULT_ANSWERS, tried: {}, done: false });
+  // Adviser: `book` holds the client files; `clientId` is the open one (null = the adviser's own plan).
+  const [book, setBook] = useState(loadBook);
+  const [clientId, setClientId] = useState(null);
+  const [state, setState] = useState(() => loadPlan() || EMPTY);
   const [tab, setTab] = useState('plan');
   const [theme, setThemeState] = useState(getTheme);
-  const { answers, tried, done } = state;
+  const { answers, tried, done, scenarios } = state;
+  const client = clientId ? book.clients.find((c) => c.id === clientId) : null;
 
-  useEffect(() => { if (done) savePlan(state); }, [state, done]);
+  // Autosave: to the open client file, or to the personal plan.
+  useEffect(() => {
+    if (!done) return;
+    if (clientId) setBook((b) => ({ ...b, clients: b.clients.map((c) => (c.id === clientId ? { ...c, state, updated: new Date().toISOString() } : c)) }));
+    else savePlan(state);
+  }, [state, done, clientId]);
+  useEffect(() => { saveBook(book); }, [book]);
   useEffect(() => { window.scrollTo(0, 0); }, [tab]);
 
   const now = useMemo(() => new Date(), []);
@@ -408,15 +380,31 @@ export default function GuidedApp() {
 
   const setAnswer = (patch) => setState((s) => ({ ...s, answers: { ...s.answers, ...patch }, tried: {} }));
   const setTried = (fn) => setState((s) => ({ ...s, tried: typeof fn === 'function' ? fn(s.tried) : fn }));
-  const restart = () => { if (window.confirm('Erase your answers on this device and start again?')) { clearPlan(); setState({ answers: DEFAULT_ANSWERS, tried: {}, done: false }); setTab('plan'); } };
+  const setScenarios = (fn) => setState((s) => ({ ...s, scenarios: fn(s.scenarios || []) }));
+  const restart = () => {
+    if (!window.confirm(client ? `Erase the answers in ${client.name}'s file and start again?` : 'Erase your answers on this device and start again?')) return;
+    if (!clientId) clearPlan();
+    setState(EMPTY); setTab('plan');
+  };
   const flip = () => { const m = theme === 'dark' ? 'light' : 'dark'; setTheme(m); setThemeState(m); };
+  const upgrade = (t) => { rememberTier(t); setTier(t); };
+  const openClient = (id) => {
+    const c = id ? book.clients.find((x) => x.id === id) : null;
+    setClientId(id || null); setState(c ? c.state : loadPlan() || EMPTY); setTab('plan');
+  };
+  const addClient = (name) => {
+    const c = { id: newId(), name, notes: '', updated: new Date().toISOString(), state: EMPTY };
+    setBook((b) => ({ ...b, clients: [...b.clients, c] })); setClientId(c.id); setState(EMPTY); setTab('plan');
+  };
+  const pro = tier === 'pro';
+  const showTabs = done && tab !== 'clients' && tab !== 'report';
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="wrap">
-          <a className="brand" href="/" aria-label="Fusion 富生 home"><span className="brand-mark" aria-hidden="true">富</span><span className="brand-name">Fusion</span></a>
-          {done && <nav className="tabs" aria-label="Planner">
+          <a className="brand" href="/" aria-label="Fusion 富生 home"><img className="brand-mark seal" src="/seal.png" alt="" width="32" height="32" /><span className="brand-name">Fusion</span></a>
+          {done && tab !== 'report' && <nav className="tabs" aria-label="Planner">
             {TABS.map(([id, label]) => (
               <button key={id} type="button" className={tab === id ? 'on' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[id]} /></svg>{label}
@@ -424,7 +412,9 @@ export default function GuidedApp() {
             ))}
           </nav>}
           <div className="header-actions">
-            <span className="pill">{tierName(tier)}</span>
+            {pro
+              ? <button type="button" className={`client-btn ${tab === 'clients' ? 'on' : ''}`} onClick={() => setTab('clients')}><span className="visually-hidden">Client file: </span>{client ? client.name : 'My plan'} ▾</button>
+              : <span className="pill">{tierName(tier)}</span>}
             <button type="button" className="icon-btn" onClick={flip} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 {theme === 'dark' ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></> : <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />}
@@ -434,14 +424,22 @@ export default function GuidedApp() {
         </div>
       </header>
 
-      {!done ? (
-        <Setup answers={answers} onDone={(a) => setState({ answers: a, tried: {}, done: true })} />
-      ) : (
+      {pro && tab === 'clients' ? (
         <main className="wrap main" id="main">
+          <ClientsView book={book} setBook={setBook} clientId={clientId} onOpen={openClient} onAdd={addClient} onClose={() => setTab('plan')}
+            onDeleted={(id) => { if (id === clientId) openClient(null); }} />
+        </main>
+      ) : !done ? (
+        <Setup key={clientId || 'me'} answers={answers} title={client ? `Setting up ${client.name}'s plan` : null} onDone={(a) => setState((s) => ({ ...s, answers: a, tried: {}, done: true }))} />
+      ) : (
+        <main className={`wrap main ${showTabs ? '' : 'no-tabs'}`} id="main">
           {tab === 'plan' && <PlanView plan={plan} moves={moves} changed={changed} onReset={() => setTried({})} go={setTab} />}
           {tab === 'moves' && <MovesView base={base} plan={plan} moves={moves} tried={tried} setTried={setTried} answers={answers} />}
-          {tab === 'details' && <DetailsView plan={plan} setAnswer={(p) => setState((s) => ({ ...s, answers: { ...s.answers, ...p } }))} />}
-          {tab === 'profile' && <ProfileView answers={answers} setAnswer={setAnswer} onRestart={restart} tier={tier} />}
+          {tab === 'details' && <DetailsView plan={plan} tier={tier} onReport={() => setTab('report')} setAnswer={(p) => setState((s) => ({ ...s, answers: { ...s.answers, ...p } }))} />}
+          {tab === 'compare' && <CompareView tier={tier} base={base} plan={plan} answers={answers} tried={tried} changed={changed} scenarios={scenarios || []} setScenarios={setScenarios} setTried={setTried} now={now} go={setTab} />}
+          {tab === 'profile' && <ProfileView answers={answers} setAnswer={setAnswer} onRestart={restart} tier={tier} onTier={upgrade} />}
+          {tab === 'report' && <ReportView plan={plan} base={base} answers={answers} scenarios={scenarios || []} now={now} tier={tier} client={client} adviser={book.adviser}
+            setNotes={(notes) => setBook((b) => ({ ...b, clients: b.clients.map((c) => (c.id === clientId ? { ...c, notes } : c)) }))} onBack={() => setTab('details')} />}
         </main>
       )}
     </div>

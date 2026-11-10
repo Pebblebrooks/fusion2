@@ -14,12 +14,7 @@ const set = (k, v) => { try { v === null ? localStorage.removeItem(k) : localSto
 export const loadPlan = () => {
   try {
     const raw = JSON.parse(get(PLAN_KEY) || 'null');
-    if (!raw || typeof raw !== 'object' || !raw.answers) return null;
-    const answers = { ...DEFAULT_ANSWERS };
-    for (const k of Object.keys(DEFAULT_ANSWERS)) {
-      if (typeof raw.answers[k] === typeof DEFAULT_ANSWERS[k]) answers[k] = raw.answers[k];
-    }
-    return { answers, tried: raw.tried && typeof raw.tried === 'object' ? raw.tried : {}, done: !!raw.done };
+    return raw && typeof raw === 'object' && raw.answers ? cleanState(raw) : null;
   } catch { return null; }
 };
 export const savePlan = (state) => set(PLAN_KEY, JSON.stringify({ v: 1, savedAt: new Date().toISOString(), ...state }));
@@ -53,3 +48,38 @@ export const setTheme = (mode) => {
 /** Link that opens the classic planner with this plan loaded. */
 export const classicLink = (answers, now = new Date()) =>
   `/app/classic/?p=${encodePlanState(JSON.stringify({ appVersion: 'V4-2026', inputs: toEngineInputs(answers, now) }))}`;
+
+/* ── Adviser: client files, kept on this device ─────────────────────────────
+   fusion_clients_v1 = { adviser: { name, firm }, clients: [{ id, name, notes, updated, state }] }
+   `state` has the same shape as the personal plan: { answers, tried, done, scenarios }. */
+const CLIENTS_KEY = 'fusion_clients_v1';
+const clean = (state) => {
+  const answers = { ...DEFAULT_ANSWERS };
+  for (const k of Object.keys(DEFAULT_ANSWERS)) if (state?.answers && typeof state.answers[k] === typeof DEFAULT_ANSWERS[k]) answers[k] = state.answers[k];
+  return {
+    answers, done: !!state?.done,
+    tried: state?.tried && typeof state.tried === 'object' ? state.tried : {},
+    scenarios: Array.isArray(state?.scenarios) ? state.scenarios.filter((s) => s && typeof s.name === 'string' && s.tried && typeof s.tried === 'object').slice(0, 4) : [],
+  };
+};
+export const cleanState = clean;
+export const loadBook = () => {
+  try {
+    const raw = JSON.parse(get(CLIENTS_KEY) || 'null');
+    if (!raw || !Array.isArray(raw.clients)) return { adviser: { name: '', firm: '' }, clients: [] };
+    return {
+      adviser: { name: String(raw.adviser?.name || ''), firm: String(raw.adviser?.firm || '') },
+      clients: raw.clients.filter((c) => c && typeof c.id === 'string').map((c) => ({ id: c.id, name: String(c.name || 'Client'), notes: String(c.notes || ''), updated: String(c.updated || ''), state: clean(c.state) })),
+    };
+  } catch { return { adviser: { name: '', firm: '' }, clients: [] }; }
+};
+export const saveBook = (book) => set(CLIENTS_KEY, JSON.stringify({ v: 1, ...book }));
+export const newId = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/** Download text as a file (CSV, JSON backup). */
+export const download = (name, text, type = 'text/plain') => {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
