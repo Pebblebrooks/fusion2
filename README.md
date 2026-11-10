@@ -8,7 +8,7 @@ Cloudflare Worker.
   - Guided: Plan, Moves, Details, Profile.
   - Workspace adds: Compare (up to 4 saved scenarios), stress test, year-by-year table with CSV download, own assumptions, printable report.
   - Adviser adds: client files kept on the device (with backup and restore), firm name and notes on client reports.
-  - Logo: `public/seal.png`, the same seal as the classic planner.
+  - Logo: the teal 富 mark on the website and new planner; the classic planner keeps its red seal, so the two are easy to tell apart.
 - Classic planner (all tabs): `/app/classic/` — opens from the new planner with the same plan loaded. Old share links (`/app/?p=…`) are forwarded here.
 - Checkout: `/checkout/` (records plan requests until online payment is switched on)
 

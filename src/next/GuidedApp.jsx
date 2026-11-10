@@ -83,7 +83,7 @@ function Gate({ onPass }) {
   return (
     <main className="gate">
       <form className="panel gate-card" onSubmit={submit}>
-        <img className="brand-mark seal" src="/seal.png" alt="" width="32" height="32" />
+        <span className="brand-mark" aria-hidden="true">富</span>
         <h1>Fusion planner</h1>
         <p className="muted">Private beta. Enter the access code from your invitation.</p>
         <label className="fld" htmlFor="gate-code"><span className="field-label">Access code</span>
@@ -403,7 +403,7 @@ export default function GuidedApp() {
     <div className="app">
       <header className="app-header">
         <div className="wrap">
-          <a className="brand" href="/" aria-label="Fusion 富生 home"><img className="brand-mark seal" src="/seal.png" alt="" width="32" height="32" /><span className="brand-name">Fusion</span></a>
+          <a className="brand" href="/" aria-label="Fusion 富生 home"><span className="brand-mark" aria-hidden="true">富</span><span className="brand-name">Fusion</span></a>
           {done && tab !== 'report' && <nav className="tabs" aria-label="Planner">
             {TABS.map(([id, label]) => (
               <button key={id} type="button" className={tab === id ? 'on' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>
