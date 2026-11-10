@@ -1,0 +1,84 @@
+/* Planner base styles (/app/). Loaded by src/main.jsx.
+ *
+ * Started life as Vite's starter stylesheet. The planner's spacing was tuned
+ * with it, so the layout rules (font, line-height, body, button and h1
+ * geometry) are kept exactly as they were.
+ *
+ * What changed: the colour rules used to follow the DEVICE's light/dark
+ * setting (prefers-color-scheme), not the planner's own theme. A phone in
+ * dark mode showed light-theme screens with white default text, dark default
+ * buttons and dark dropdowns. Colours now follow the planner theme classes
+ * (.theme-dark / .theme-light, set in App.jsx). The website pages do not use
+ * this file (see site/site.css).
+ */
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Default = dark, matching the access screen and the planner's default theme */
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #060d1f;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Page background and native controls (scrollbars, dropdowns, date pickers)
+   follow the planner theme, including content rendered outside the app root. */
+:root:has(.theme-light) { color-scheme: light; color: #1C1917; background-color: #FAFAF8; }
+:root:has(.theme-dark)  { color-scheme: dark;  color: rgba(255, 255, 255, 0.87); background-color: #060d1f; }
+.theme-light { color-scheme: light; }
+.theme-dark  { color-scheme: dark; }
+
+a {
+  font-weight: 500;
+  color: #8b93ff;
+  text-decoration: inherit;
+}
+a:hover { color: #a5abff; }
+:where(.theme-light) a { color: #4f46e5; }
+:where(.theme-light) a:hover { color: #4338ca; }
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+:where(.theme-light) button { background-color: #f9f9f9; }
+button:hover { border-color: #646cff; }
+
+/* :where() keeps the theme selectors at the same low priority as the plain
+   element rules, so the planner's own classes and inline styles still win. */
+
+/* Keyboard focus ring only. The old `button:focus` rule also drew a ring after
+   every mouse click (e.g. around the selected tab). */
+button:focus { outline: none; }
+button:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+:where(.theme-light) button:focus-visible { outline-color: #2563eb; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #60a5fa; outline-offset: 1px; }
+:where(.theme-light) :is(input, select, textarea):focus-visible { outline-color: #2563eb; }

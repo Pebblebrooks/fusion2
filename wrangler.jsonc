@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Keep the name "fusion": the planner's saved plans live in browser storage
+  // for this origin (fusion.<subdomain>.workers.dev). Renaming changes the URL.
+  "name": "fusion2",
+  "main": "src/index.js",
+  // Same runtime date and flag as the live deployment, so Worker behaviour is unchanged.
+  "compatibility_date": "2025-09-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    // /pricing → /pricing/ ; unknown paths get 404.html (with a 404 status)
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page",
+    // Browser page loads that don't match a file are answered by the 404 page
+    // without reaching the Worker — so the Worker's own routes must run first.
+    "run_worker_first": ["/app/*", "/api/*", "/logout", "/healthz"]
+  },
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en-SG">
+<head>
+<meta charset="utf-8">
+<title>Checkout — Fusion 富生</title>
+<meta name="description" content="Choose your Fusion plan and billing period.">
+<meta name="robots" content="noindex">
+<!-- @include head -->
+</head>
+<body data-page="pricing">
+<!-- @include header -->
+<main id="main">
+  <section class="page-hero" style="padding-bottom:24px">
+    <div class="wrap">
+      <p class="eyebrow"><a href="/pricing/">← Back to pricing</a></p>
+      <h1>Your plan</h1>
+      <p class="lead">Review your plan and how you'd like to pay. You can change or cancel any time.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="checkout">
+        <div>
+          <form class="panel" id="checkout-form" novalidate>
+            <fieldset class="field">
+              <legend>Plan</legend>
+              <div class="choice-grid">
+                <label class="choice"><input type="radio" name="plan" value="workspace" checked><strong>Workspace</strong><span>S$79 a year or S$9 a month</span></label>
+                <label class="choice"><input type="radio" name="plan" value="adviser"><strong>Adviser</strong><span>S$468 a seat a year or S$49 a month</span></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="field">
+              <legend>Billing</legend>
+              <div class="choice-grid">
+                <label class="choice"><input type="radio" name="interval" value="year" checked><strong>Yearly</strong><span>Best value</span></label>
+                <label class="choice"><input type="radio" name="interval" value="month"><strong>Monthly</strong><span>Card only</span></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="field">
+              <legend>Payment method</legend>
+              <div class="choice-grid">
+                <label class="choice"><input type="radio" name="method" value="card" checked><strong>Card</strong><span>Visa, Mastercard, Amex. Renews automatically.</span></label>
+                <label class="choice"><input type="radio" name="method" value="paynow"><strong>PayNow</strong><span data-paynow-hint>One payment a year. We email a PayNow invoice before each renewal.</span></label>
+              </div>
+            </fieldset>
+
+            <div class="field">
+              <label for="co-email">Email</label>
+              <input class="input" id="co-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+              <p class="hint">Your receipt and sign-in link are sent here.</p>
+            </div>
+            <div class="field">
+              <label for="co-name">Name <span class="muted">(optional)</span></label>
+              <input class="input" id="co-name" name="name" type="text" autocomplete="name">
+            </div>
+
+            <label class="check" style="margin-bottom:20px"><input type="checkbox" name="agree"> <span>I have read the <a href="/terms/" target="_blank">Terms of use</a> and <a href="/privacy/" target="_blank">Privacy policy</a>, and understand Fusion is an educational tool, not financial advice.</span></label>
+
+            <button class="btn btn-primary btn-lg btn-block" type="submit">Continue to secure payment</button>
+            <p class="form-status" id="checkout-status" role="status" aria-live="polite"></p>
+            <p class="small muted" style="margin-top:14px">Payments are processed by Stripe. Fusion never sees or stores your card details.</p>
+          </form>
+
+          <div class="panel" data-checkout-done hidden>
+            <h2>Thanks — you're on the list</h2>
+            <p>Online payment isn't switched on yet during the beta. We've noted your plan choice and will email <strong data-done-email></strong> with a payment link as soon as it's ready.</p>
+            <p style="margin-top:12px"><strong>Nothing has been charged.</strong></p>
+            <div class="btn-row" style="margin-top:20px">
+              <a class="btn btn-primary" href="/app/">Open the planner</a>
+              <a class="btn btn-secondary" href="/learn/">Read the CPF guide</a>
+            </div>
+          </div>
+        </div>
+
+        <aside class="panel" aria-label="Order summary">
+          <h2>Summary</h2>
+          <div class="summary-row"><span>Plan</span><strong data-sum-plan>Workspace</strong></div>
+          <div class="summary-row"><span>Billing</span><span data-sum-interval>Yearly</span></div>
+          <div class="summary-row"><span>Price</span><span data-sum-price>S$79 / year</span></div>
+          <div class="summary-row"><span>Due today</span><span class="summary-total" data-sum-total>S$79</span></div>
+          <p class="small muted" data-sum-trial hidden></p>
+          <p class="small" style="color:var(--brand);margin-top:6px" data-sum-saving>You save 27% versus monthly billing.</p>
+          <h3 style="font-size:16px;margin:22px 0 10px">Included</h3>
+          <ul class="small" data-sum-features style="margin:0;padding-left:18px;display:grid;gap:6px;color:var(--ink-2)"></ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+</main>
+<!-- @include footer -->
+</body>
+</html>

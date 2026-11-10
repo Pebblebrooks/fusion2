@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en-SG">
+<head>
+<meta charset="utf-8">
+<title>Fusion 富生 — CPF retirement planner for Singapore</title>
+<meta name="description" content="See what your CPF will pay you each month, how ready you are, and the moves that would raise it. Built on the 2026 CPF rules.">
+<link rel="canonical" href="https://fusion2.ehtan2022.workers.dev/">
+<meta property="og:title" content="Fusion 富生 — CPF retirement planner for Singapore">
+<meta property="og:description" content="Know what your CPF will pay you. Then improve it.">
+<meta property="og:type" content="website">
+<script>
+  // Old share links pointed at the site root (/?p=…). The planner now lives at /app/.
+  (function () {
+    var q = new URLSearchParams(location.search);
+    if (q.has('p') || q.has('s') || q.has('state')) location.replace('/app/' + location.search + location.hash);
+  })();
+</script>
+<!-- @include head -->
+</head>
+<body data-page="home">
+<!-- @include header -->
+<main id="main">
+
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="welcome-back" data-welcome-back>
+          <strong>Welcome back.</strong> Your plan is saved on this device. <a href="/app/">Open my plan →</a>
+        </div>
+        <span class="pill">Updated for the 2026 CPF rules</span>
+        <h1>Know what your CPF will pay you. Then improve it.</h1>
+        <p class="lead">Enter your age, salary and CPF balances. See your estimated CPF LIFE payout, a readiness score, and the moves that would raise it most — explained in plain English.</p>
+        <div class="btn-row">
+          <a class="btn btn-primary btn-lg" href="/app/">Open the planner</a>
+          <a class="btn btn-secondary btn-lg" href="/pricing/">Compare plans</a>
+        </div>
+        <p class="hero-note">Private beta: the planner needs an access code for now. <a href="/contact/?topic=access">Request one</a>. Your inputs stay on your device.</p>
+      </div>
+
+      <div class="preview-card" aria-label="Product preview (illustration)">
+        <div class="preview-top">
+          <div>
+            <p class="preview-label">Sample profile · age 42</p>
+            <p class="preview-headline">On track for <span>S$2,140 a month</span> from 65</p>
+          </div>
+          <svg width="120" height="70" viewBox="0 0 240 140" role="img" aria-label="Readiness score 74 out of 100">
+            <path d="M 20 120 A 100 100 0 0 1 220 120" fill="none" stroke="#E7E5E4" stroke-width="20" stroke-linecap="round"/>
+            <path d="M 20 120 A 100 100 0 0 1 192 49" fill="none" stroke="#0F766E" stroke-width="20" stroke-linecap="round"/>
+            <text x="120" y="112" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-size="52" font-weight="700" fill="#1C1917">74</text>
+          </svg>
+        </div>
+        <svg viewBox="0 0 520 150" width="100%" height="150" aria-hidden="true">
+          <path d="M0 140 L0 120 L140 100 L260 70 L340 50 L400 56 L470 90 L520 118 L520 140 Z" fill="#D6EAE6"/>
+          <path d="M0 120 L140 96 L260 56 L340 28 L400 38 L470 80 L520 114" fill="none" stroke="#0F766E" stroke-width="3"/>
+          <line x1="340" y1="10" x2="340" y2="140" stroke="#1C1917" stroke-dasharray="4 4"/>
+          <text x="346" y="22" font-family="Inter, sans-serif" font-size="12" fill="#57534E">Payouts start</text>
+        </svg>
+        <div class="preview-moves">
+          <div><p>Top up S$8k a year</p><p>+S$310 / mo</p></div>
+          <div><p>Start payouts at 67</p><p>+S$290 / mo</p></div>
+          <div><p>Less OA on housing</p><p>+S$140 / mo</p></div>
+        </div>
+        <p class="preview-foot">Illustration only. Your figures depend on your own inputs.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="assurances band" aria-label="Why people trust Fusion">
+    <div class="wrap">
+      <p><strong>Current CPF rules</strong>2026 contribution rates, retirement sums and interest floors</p>
+      <p><strong>Private by default</strong>Calculations run in your browser, not on our servers</p>
+      <p><strong>No CPF login</strong>We never ask for Singpass or your CPF password</p>
+      <p><strong>Education, not advice</strong>Every projection can be checked year by year</p>
+    </div>
+  </section>
+
+  <section class="section" id="product">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">One engine, three ways to use it</p>
+        <h2>Start with a quick answer. Go deeper when you want to.</h2>
+        <p>The same CPF projection engine powers every plan. You pay for depth and for client work — never for accurate numbers or warnings.</p>
+      </div>
+      <div class="grid-3">
+        <article class="card">
+          <p class="eyebrow">Guided · Free</p>
+          <h3>“Will I have enough?”</h3>
+          <p>Your projected CPF balances, estimated monthly payout, readiness score and what-if sliders — with warnings when something looks off.</p>
+          <a class="card-link" href="/app/">Open the planner →</a>
+        </article>
+        <article class="card">
+          <p class="eyebrow">Workspace · S$79 a year</p>
+          <h3>For people who like to see every lever</h3>
+          <p>Strategy tools, stress tests, Monte Carlo, life events, CPF LIFE plan comparison, household planning and full year-by-year data.</p>
+          <a class="card-link" href="/pricing/">See what's included →</a>
+        </article>
+        <article class="card">
+          <p class="eyebrow">Adviser · per seat</p>
+          <h3>For financial advisers and planners</h3>
+          <p>Everything in Workspace, licensed for client work, with share links and PDF reports for meetings. Client workspace in development.</p>
+          <a class="card-link" href="/advisers/">Fusion for advisers →</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section band">
+    <div class="wrap">
+      <div class="feature-row">
+        <div>
+          <p class="eyebrow">See your number</p>
+          <h3>Your retirement income, not just a balance</h3>
+          <p>Fusion projects your OA, SA, MA and RA year by year using the CPF contribution rates for your age and citizenship, then converts the result into a monthly CPF LIFE estimate.</p>
+          <ul>
+            <li>Readiness score with a breakdown of what is helping and hurting</li>
+            <li>Standard, Escalating and Basic CPF LIFE plans side by side</li>
+            <li>Citizens, PRs (graduated rates), self-employed and RSS members</li>
+          </ul>
+        </div>
+        <div class="feature-visual" aria-hidden="true">
+          <p class="preview-label">Readiness breakdown</p>
+          <svg viewBox="0 0 440 190" width="100%">
+            <g font-family="Inter, sans-serif" font-size="13" fill="#44403C">
+              <text x="0" y="22">RA vs Full Retirement Sum</text><rect x="0" y="30" width="440" height="10" rx="5" fill="#F5F5F4"/><rect x="0" y="30" width="370" height="10" rx="5" fill="#0F766E"/>
+              <text x="0" y="70">MediSave vs Basic Healthcare Sum</text><rect x="0" y="78" width="440" height="10" rx="5" fill="#F5F5F4"/><rect x="0" y="78" width="300" height="10" rx="5" fill="#0F766E"/>
+              <text x="0" y="118">Payout vs target income</text><rect x="0" y="126" width="440" height="10" rx="5" fill="#F5F5F4"/><rect x="0" y="126" width="250" height="10" rx="5" fill="#B45309"/>
+              <text x="0" y="166">Stress resilience</text><rect x="0" y="174" width="440" height="10" rx="5" fill="#F5F5F4"/><rect x="0" y="174" width="330" height="10" rx="5" fill="#0F766E"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="feature-row flip">
+        <div>
+          <p class="eyebrow">Test the what-ifs</p>
+          <h3>Find out if your plan survives a bad year</h3>
+          <p>Overlay real life on your projection — retrenchment, a career break, a medical bill, a windfall, part-time work — and see how your balances and payouts respond.</p>
+          <ul>
+            <li>Stress Centre with named scenarios such as a CPF rate cut and inflation shock</li>
+            <li>Monte Carlo simulation (500 runs) with P10–P90 bands</li>
+            <li>Scenario A vs B comparison before big decisions</li>
+          </ul>
+        </div>
+        <div class="feature-visual" aria-hidden="true">
+          <p class="preview-label">Projected CPF · P10–P90 range</p>
+          <svg viewBox="0 0 440 180" width="100%">
+            <path d="M0 160 C 120 140, 220 90, 440 20 L440 80 C 260 120, 140 150, 0 165 Z" fill="#D6EAE6"/>
+            <path d="M0 162 C 120 146, 240 104, 440 50" fill="none" stroke="#0F766E" stroke-width="3"/>
+            <path d="M0 163 C 140 152, 260 128, 440 98" fill="none" stroke="#B45309" stroke-width="2" stroke-dasharray="6 5"/>
+            <g font-family="Inter, sans-serif" font-size="12" fill="#57534E"><text x="300" y="44">Base</text><text x="350" y="138">Stress</text></g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="feature-row">
+        <div>
+          <p class="eyebrow">Find the moves</p>
+          <h3>Ranked actions, with the trade-offs spelled out</h3>
+          <p>The Turbocharger scans the CPF levers available to you — top-ups, transfers, deferring payouts, housing refunds, SRS — and shows what each would add, what it costs and what it locks up.</p>
+          <ul>
+            <li>Goal Simulator works backwards from the balance you want</li>
+            <li>Tax Optimizer combines RSTU, MediSave top-ups and SRS</li>
+            <li>Apply a move to your plan in one click, undo just as fast</li>
+          </ul>
+        </div>
+        <div class="feature-visual" aria-hidden="true">
+          <p class="preview-label">Top moves for this profile</p>
+          <svg viewBox="0 0 440 170" width="100%">
+            <g font-family="Inter, sans-serif" font-size="14">
+              <rect x="0" y="0" width="440" height="48" rx="10" fill="#F5F5F4"/><text x="16" y="29" fill="#1C1917">Cash top-up to SA (RSTU)</text><text x="424" y="29" text-anchor="end" fill="#0F766E" font-weight="700">+S$310/mo</text>
+              <rect x="0" y="60" width="440" height="48" rx="10" fill="#F5F5F4"/><text x="16" y="89" fill="#1C1917">Defer payouts to 67</text><text x="424" y="89" text-anchor="end" fill="#0F766E" font-weight="700">+S$290/mo</text>
+              <rect x="0" y="120" width="440" height="48" rx="10" fill="#F5F5F4"/><text x="16" y="149" fill="#1C1917">Voluntary housing refund</text><text x="424" y="149" text-anchor="end" fill="#0F766E" font-weight="700">+S$140/mo</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Built on current rules</p>
+        <h2>The 2026 numbers behind every projection</h2>
+        <p>Fusion is updated when the CPF Board publishes new rates and retirement sums. These are the figures the engine uses today.</p>
+      </div>
+      <div class="stat-strip">
+        <div class="stat"><p class="k">Basic Retirement Sum</p><p class="v">S$110,200</p><p class="s">Turning 55 in 2026</p></div>
+        <div class="stat"><p class="k">Full Retirement Sum</p><p class="v">S$220,400</p><p class="s">Turning 55 in 2026</p></div>
+        <div class="stat"><p class="k">Enhanced Retirement Sum</p><p class="v">S$440,800</p><p class="s">Turning 55 in 2026</p></div>
+        <div class="stat"><p class="k">Basic Healthcare Sum</p><p class="v">S$79,000</p><p class="s">Under 65 in 2026</p></div>
+        <div class="stat"><p class="k">OA interest</p><p class="v">2.5%</p><p class="s">Plus extra interest on the first S$60k</p></div>
+        <div class="stat"><p class="k">SA, MA and RA floor</p><p class="v">4.0%</p><p class="s">Extended to 31 Dec 2027</p></div>
+      </div>
+      <p class="source">Source: CPF Board. <a href="/learn/#numbers">See all figures and how they are used →</a></p>
+    </div>
+  </section>
+
+  <section class="section band">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Learn CPF</p>
+        <h2>Understand the system before you optimise it</h2>
+      </div>
+      <div class="grid-3">
+        <a class="card card-compact" href="/learn/#accounts"><h3>The four CPF accounts</h3><p>What OA, SA, MA and RA are for, what they earn and what changes at 55.</p></a>
+        <a class="card card-compact" href="/learn/#cpf-life"><h3>CPF LIFE, explained</h3><p>Standard, Escalating and Basic plans, and what deferring to 70 does.</p></a>
+        <a class="card card-compact" href="/learn/#playbook"><h3>The 2026 playbook</h3><p>Top-ups, transfers, grants and tax reliefs worth knowing — and their catches.</p></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-tight">
+    <div class="wrap">
+      <div class="notice info">
+        <strong>Protect your CPF from scams.</strong> CPF never asks for your Singpass details by phone or message. You can turn on the CPF Withdrawal Lock or the Safety Switch, and nominate a Trusted Contact, in your CPF account. <a href="https://www.cpf.gov.sg/member/account-services/fighting-scams/cpf-account-safeguards" target="_blank" rel="noopener">See CPF's account safeguards →</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-tight">
+    <div class="wrap">
+      <div class="cta-band">
+        <div>
+          <h2>See your number in a few minutes.</h2>
+          <p>Free to use. No CPF login. Nothing leaves your device.</p>
+        </div>
+        <div class="btn-row">
+          <a class="btn btn-light btn-lg" href="/app/">Open the planner</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+<!-- @include footer -->
+</body>
+</html>

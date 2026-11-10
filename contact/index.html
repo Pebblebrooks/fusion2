@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en-SG">
+<head>
+<meta charset="utf-8">
+<title>Contact — Fusion 富生</title>
+<meta name="description" content="Send feedback, report a bug, request beta access or ask about Adviser seats.">
+<link rel="canonical" href="https://fusion2.ehtan2022.workers.dev/contact/">
+<!-- @include head -->
+</head>
+<body data-page="contact">
+<!-- @include header -->
+<main id="main">
+  <section class="page-hero">
+    <div class="wrap narrow">
+      <p class="eyebrow">Contact</p>
+      <h1>Talk to us</h1>
+      <p class="lead">Spotted a bug, have an idea, or need a beta access code? Every message is read.</p>
+    </div>
+  </section>
+  <div class="wrap narrow">
+    <form class="panel" id="contact-form" novalidate>
+      <div class="field">
+        <label for="c-topic">What's this about?</label>
+        <select class="input" id="c-topic" name="topic">
+          <option value="feedback">Feedback or an idea</option>
+          <option value="bug">Report a bug</option>
+          <option value="access">Request beta access</option>
+          <option value="adviser">Adviser seats or a demo</option>
+          <option value="billing">Billing</option>
+          <option value="privacy">Privacy request</option>
+        </select>
+      </div>
+      <div class="grid-2" style="gap:0 16px">
+        <div class="field">
+          <label for="c-name">Name <span class="muted">(optional)</span></label>
+          <input class="input" id="c-name" name="name" type="text" autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="c-email">Email</label>
+          <input class="input" id="c-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+        </div>
+      </div>
+      <div class="field">
+        <label for="c-message">Message</label>
+        <textarea class="input" id="c-message" name="message" rows="5" required></textarea>
+      </div>
+      <div class="hp" aria-hidden="true"><label for="c-website">Leave this empty</label><input id="c-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+      <button class="btn btn-primary btn-lg" type="submit">Send message</button>
+      <p class="form-status" id="contact-status" role="status" aria-live="polite"></p>
+      <p class="small muted" style="margin-top:14px">We store your details only to reply to you. See our <a href="/privacy/">Privacy policy</a>. Please don't include your CPF balances, NRIC or account numbers.</p>
+    </form>
+  </div>
+</main>
+<!-- @include footer -->
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  // Replaces the old website Worker. The name must match the old Worker
+  // ("fusionweb") so the same address now forwards to the new site.
+  "name": "fusionweb",
+  "main": "index.js",
+  "compatibility_date": "2025-09-27"
+}

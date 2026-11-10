@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /checkout/
+Disallow: /api/
+Sitemap: https://fusion2.ehtan2022.workers.dev/sitemap.xml
