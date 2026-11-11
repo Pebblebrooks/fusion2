@@ -8,11 +8,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { buildPlan, findMoves, DEFAULT_ANSWERS, ageFrom, RSTU_RELIEF_CAP } from '../model/plan.js';
 import { tierForGateCode } from '../entitlements/gate.js';
-import { tierName } from '../entitlements/tiers.js';
+import { tierName, PLAN_RANK } from '../entitlements/tiers.js';
 import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink, loadBook, saveBook, newId } from './storage.js';
 import SavingsChart from './Chart.jsx';
 import { money, pct, Help, MoneyField, Choice, Slider } from './ui.jsx';
-import { CompareView, WorkspaceDetails, Assumptions, ClientsView, ReportView, UpgradeCode } from './Workspace.jsx';
+import { CompareView, WorkspaceDetails, Assumptions, ClientsView, ReportView, UpgradeCode, PreviewSwitch } from './Workspace.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const LIFE_PLANS = [
@@ -315,7 +315,7 @@ function DetailsView({ plan, setAnswer, tier, onReport }) {
 }
 
 /* ── Profile ──────────────────────────────────────────────────────────────── */
-function ProfileView({ answers, setAnswer, onRestart, tier, onTier }) {
+function ProfileView({ answers, setAnswer, onRestart, tier, ownTier, onTier, onPreview }) {
   const { age } = ageFrom(answers.birthYear, answers.birthMonth);
   return (
     <>
@@ -338,7 +338,8 @@ function ProfileView({ answers, setAnswer, onRestart, tier, onTier }) {
         </div>
         <p className="small muted">Saved on this device only. Clearing your browser data removes it.</p>
       </section>
-      <UpgradeCode tier={tier} onTier={onTier} />
+      <PreviewSwitch tier={tier} ownTier={ownTier} onPreview={onPreview} />
+      <UpgradeCode tier={ownTier} onTier={onTier} />
     </>
   );
 }
@@ -352,7 +353,11 @@ const ICONS = {
 const EMPTY = { answers: DEFAULT_ANSWERS, tried: {}, done: false, scenarios: [] };
 
 export default function GuidedApp() {
-  const [tier, setTier] = useState(currentTier);
+  // `ownTier` is what this device has unlocked. `preview` lets Workspace and Adviser users look at a
+  // lower plan; it lasts until the page is reloaded and never changes saved plans or client files.
+  const [ownTier, setTier] = useState(currentTier);
+  const [preview, setPreview] = useState(null);
+  const tier = preview && PLAN_RANK[preview] < PLAN_RANK[ownTier] ? preview : ownTier;
   // Adviser: `book` holds the client files; `clientId` is the open one (null = the adviser's own plan).
   const [book, setBook] = useState(loadBook);
   const [clientId, setClientId] = useState(null);
@@ -376,7 +381,7 @@ export default function GuidedApp() {
   const changed = WHAT_IF_KEYS.filter((k) => tried[k] !== undefined && tried[k] !== answers[k]).length;
   const plan = useMemo(() => (done ? (changed ? buildPlan({ ...answers, ...tried }, now) : base) : null), [answers, tried, done, base, changed, now]);
 
-  if (!tier) return <Gate onPass={setTier} />;
+  if (!ownTier) return <Gate onPass={setTier} />;
 
   const setAnswer = (patch) => setState((s) => ({ ...s, answers: { ...s.answers, ...patch }, tried: {} }));
   const setTried = (fn) => setState((s) => ({ ...s, tried: typeof fn === 'function' ? fn(s.tried) : fn }));
@@ -433,11 +438,12 @@ export default function GuidedApp() {
         <Setup key={clientId || 'me'} answers={answers} title={client ? `Setting up ${client.name}'s plan` : null} onDone={(a) => setState((s) => ({ ...s, answers: a, tried: {}, done: true }))} />
       ) : (
         <main className={`wrap main ${showTabs ? '' : 'no-tabs'}`} id="main">
+          {tier !== ownTier && <p className="preview-note no-print" role="status"><span>Previewing the <b>{tierName(tier)}</b> plan{client ? ` with ${client.name}'s file open` : ''}.</span> <button type="button" className="link" onClick={() => setPreview(null)}>Back to {tierName(ownTier)}</button></p>}
           {tab === 'plan' && <PlanView plan={plan} moves={moves} changed={changed} onReset={() => setTried({})} go={setTab} />}
           {tab === 'moves' && <MovesView base={base} plan={plan} moves={moves} tried={tried} setTried={setTried} answers={answers} />}
           {tab === 'details' && <DetailsView plan={plan} tier={tier} onReport={() => setTab('report')} setAnswer={(p) => setState((s) => ({ ...s, answers: { ...s.answers, ...p } }))} />}
           {tab === 'compare' && <CompareView tier={tier} base={base} plan={plan} answers={answers} tried={tried} changed={changed} scenarios={scenarios || []} setScenarios={setScenarios} setTried={setTried} now={now} go={setTab} />}
-          {tab === 'profile' && <ProfileView answers={answers} setAnswer={setAnswer} onRestart={restart} tier={tier} onTier={upgrade} />}
+          {tab === 'profile' && <ProfileView answers={answers} setAnswer={setAnswer} onRestart={restart} tier={tier} ownTier={ownTier} onTier={upgrade} onPreview={(t) => { setPreview(t === ownTier ? null : t); if (tab === 'clients' || tab === 'report') setTab('plan'); }} />}
           {tab === 'report' && <ReportView plan={plan} base={base} answers={answers} scenarios={scenarios || []} now={now} tier={tier} client={client} adviser={book.adviser}
             setNotes={(notes) => setBook((b) => ({ ...b, clients: b.clients.map((c) => (c.id === clientId ? { ...c, notes } : c)) }))} onBack={() => setTab('details')} />}
         </main>

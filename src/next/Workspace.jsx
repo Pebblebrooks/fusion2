@@ -196,6 +196,23 @@ export function Assumptions({ answers, setAnswer, tier }) {
   );
 }
 
+/** Workspace and Adviser users can look at the planner as a lower plan would see it. */
+export function PreviewSwitch({ tier, ownTier, onPreview }) {
+  const options = ['lite', 'plus', 'pro'].filter((t) => PLAN_RANK[t] <= PLAN_RANK[ownTier]);
+  if (options.length < 2) return null;
+  return (
+    <section className="panel">
+      <h2>Preview another plan</h2>
+      <p className="muted">See the planner as a {options.slice(0, -1).map(tierName).join(' or ')} user would. Your saved plan{ownTier === 'pro' ? ' and client files are' : ' is'} not changed, and the preview ends when you reload the page.</p>
+      <div className="seg" role="group" aria-label="Plan to preview">
+        {options.map((t) => (
+          <button key={t} type="button" className={tier === t ? 'on' : ''} aria-pressed={tier === t} onClick={() => onPreview(t)}>{tierName(t)}{t === ownTier ? ' (yours)' : ''}</button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function UpgradeCode({ tier, onTier }) {
   const [code, setCode] = useState(''), [msg, setMsg] = useState(null);
   if (tier === 'pro') return null;

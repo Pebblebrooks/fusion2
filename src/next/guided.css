@@ -110,8 +110,8 @@
 .input-wrap .suffix { padding-right: 14px; color: var(--muted); font-size: 14px; white-space: nowrap; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .seg { display: flex; flex-wrap: wrap; gap: 8px; }
-.seg label { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); font-weight: 500; font-size: 15px; cursor: pointer; }
-.seg label.on { border-color: var(--brand); background: var(--brand-tint); color: var(--brand); font-weight: 600; }
+.seg label, .seg button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); font-weight: 500; font-size: 15px; cursor: pointer; }
+.seg label.on, .seg button.on { border-color: var(--brand); background: var(--brand-tint); color: var(--brand); font-weight: 600; }
 .seg input, .lifeplans input { position: absolute; opacity: 0; pointer-events: none; }
 .seg label:focus-within, .lifeplans label:focus-within { outline: 3px solid var(--brand); outline-offset: 2px; }
 input[type="range"] { width: 100%; height: 32px; accent-color: var(--brand-solid); }
@@ -239,3 +239,6 @@ table.data tbody th { font-weight: 500; color: var(--ink-2); text-align: left; w
   .report h2, .report table { break-inside: avoid; }
   .muted, .small { color: #333 !important; }
 }
+
+.seg button { color: var(--ink); font-family: var(--font-body); }
+.preview-note { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--warn-border); background: var(--warn-tint); color: var(--ink); font-size: 14px; }
