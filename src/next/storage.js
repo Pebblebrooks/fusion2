@@ -83,3 +83,9 @@ export const download = (name, text, type = 'text/plain') => {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
+
+/** Sign out: forget the access code on this device (saved plans and client files stay), then clear the cookies. */
+export const signOut = () => {
+  set('fusion_gate_passed', null); set('fusion_plan', null);
+  window.location.assign('/logout');
+};

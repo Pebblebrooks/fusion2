@@ -83,6 +83,16 @@ codes that are currently inside the planner code.
 
 Update these figures each January in `src/policy/cpf2026.js` (engine) and on the website (`index.html`, `learn/index.html`).
 
+## Versions and releases
+
+1. Raise `version` in `package.json` and add an entry at the top of `CHANGELOG.md` (the test suite fails if they differ).
+2. Commit and push to `main`. Cloudflare builds and deploys.
+3. Check the live version: bottom of any planner screen, the website footer, or `/healthz`
+   (`ok v2.3.0 · build <commit> · <date>`). If it does not show the new number, the deploy did not happen.
+
+Sign out is in the planner header and footer and in the website header. It clears the access
+on the device (and the cookies via `/logout`); saved plans and client files stay on the device.
+
 ## Rule checks (November 2026)
 
 Engine figures were checked against CPF Board, IRAS and Ministry of Health publications and are

@@ -242,3 +242,7 @@ table.data tbody th { font-weight: 500; color: var(--ink-2); text-align: left; w
 
 .seg button { color: var(--ink); font-family: var(--font-body); }
 .preview-note { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--warn-border); background: var(--warn-tint); color: var(--ink); font-size: 14px; }
+
+.app-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; padding: 0 16px 24px; font-size: 13px; color: var(--muted); text-align: center; }
+.gate-card .app-foot { padding: 0; }
+@media (max-width: 760px) { .app > .app-foot { padding-bottom: 96px; } .main { padding-bottom: 24px; } .header-actions { gap: 6px; } .icon-btn { width: 40px; height: 40px; } }

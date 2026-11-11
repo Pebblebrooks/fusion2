@@ -21,6 +21,7 @@
  * ------------------------------------------------------------------------
  */
 import { PLANS, PAID_PLAN_KEYS } from './entitlements/plans.js';
+import { VERSION_LABEL } from './version.js';
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -75,7 +76,7 @@ export default {
     const path = url.pathname;
 
     if (path === '/healthz') {
-      return withSecurityHeaders(new Response('ok', { headers: { 'content-type': 'text/plain' } }));
+      return withSecurityHeaders(new Response(`ok ${VERSION_LABEL}`, { headers: { 'content-type': 'text/plain' } }));
     }
 
     if (path === '/logout') {

@@ -18,7 +18,7 @@ const call = (path, init) => worker.fetch(new Request(`https://fusion.example${p
 test('healthz', async () => {
   const res = await call('/healthz');
   assert.equal(res.status, 200);
-  assert.equal(await res.text(), 'ok');
+  assert.match(await res.text(), /^ok v/); // 'ok' + version label
   assert.equal(res.headers.get('X-Content-Type-Options'), 'nosniff');
 });
 

@@ -4,6 +4,7 @@
  * The planner app (/app/) does not load this file.
  */
 import { PLANS, PAID_PLAN_KEYS, priceFor, savingsPct } from '../src/entitlements/plans.js';
+import { VERSION_LABEL } from '../src/version.js';
 
 // Google Apps Script web app that stores feedback / access requests in the
 // developer's private Google Sheet (same endpoint the old site used).
@@ -20,7 +21,16 @@ const safeGet = (key) => { try { return localStorage.getItem(key); } catch { ret
 // ── Header: mobile menu + current page ───────────────────────────────────────
 function initHeader() {
   const header = $('.site-header');
+  $$('[data-app-version]').forEach((el) => { el.textContent = VERSION_LABEL; });
   if (!header) return;
+  // Signed in = an access code was accepted on this device (same check as the planners).
+  const signedIn = safeGet('fusion_gate_passed') === '1' || /(?:^|;\s*)cpf_tier_v1=/.test(document.cookie);
+  const signIn = $('[data-signin]', header), signOut = $('[data-signout]', header);
+  if (signIn && signOut) {
+    signIn.hidden = signedIn; signOut.hidden = !signedIn;
+    // Saved plans stay on the device; only the access is cleared. /logout clears the cookies.
+    signOut.addEventListener('click', () => { try { localStorage.removeItem('fusion_gate_passed'); localStorage.removeItem('fusion_plan'); } catch { /* private mode */ } });
+  }
   const toggle = $('.nav-toggle', header);
   const setOpen = (open) => {
     header.dataset.open = String(open);

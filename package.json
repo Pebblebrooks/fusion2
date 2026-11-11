@@ -1,9 +1,9 @@
 {
   "name": "fusion",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.3.0",
   "type": "module",
-  "description": "Fusion 富生 — CPF retirement planner and website (Cloudflare Worker)",
+  "description": "Fusion \u5bcc\u751f \u2014 CPF retirement planner and website (Cloudflare Worker)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
