@@ -1,7 +1,7 @@
 {
   "name": "fusion",
   "private": true,
-  "version": "2.3.0",
+  "version": "2.3.1",
   "type": "module",
   "description": "Fusion \u5bcc\u751f \u2014 CPF retirement planner and website (Cloudflare Worker)",
   "scripts": {

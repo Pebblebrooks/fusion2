@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { buildPlan, findMoves, DEFAULT_ANSWERS, ageFrom, RSTU_RELIEF_CAP } from '../model/plan.js';
-import { tierForGateCode } from '../entitlements/gate.js';
+import { tierForAnyCode } from '../entitlements/gate.js';
 import { tierName, PLAN_RANK } from '../entitlements/tiers.js';
 import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink, loadBook, saveBook, newId, signOut } from './storage.js';
 import { VERSION_LABEL } from '../version.js';
@@ -78,7 +78,7 @@ function Gate({ onPass }) {
   const [code, setCode] = useState(''), [bad, setBad] = useState(false);
   const submit = (e) => {
     e.preventDefault();
-    const tier = tierForGateCode(code.trim());
+    const tier = tierForAnyCode(code.trim());
     if (tier) { rememberTier(tier); onPass(tier); } else setBad(true);
   };
   return (

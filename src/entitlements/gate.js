@@ -17,10 +17,21 @@ export const TIER_PASSWORDS = {
   pro:  'BetaPro$$2026$$',
 };
 
+/**
+ * New planner's access screen: any of the four codes is accepted and opens the plan it belongs to.
+ * (The classic planner keeps tierForGateCode: admin and beta only.)
+ */
+export const tierForAnyCode = (code) =>
+  code === GATE_PASSWORDS.admin || code === TIER_PASSWORDS.pro ? 'pro'
+    : code === TIER_PASSWORDS.plus ? 'plus'
+      : code === GATE_PASSWORDS.beta ? 'lite' : null;
+
 /** Returns the tier a code unlocks at the gate ('pro' | 'lite'), or null. */
 export const tierForGateCode = (code) =>
   code === GATE_PASSWORDS.admin ? 'pro' : code === GATE_PASSWORDS.beta ? 'lite' : null;
 
 /** Returns the tier an upgrade code unlocks ('plus' | 'pro'), or null. */
-export const tierForUpgradeCode = (code) =>
-  code === TIER_PASSWORDS.pro || code === GATE_PASSWORDS.admin ? 'pro' : code === TIER_PASSWORDS.plus ? 'plus' : null;
+export const tierForUpgradeCode = (code) => {
+  const tier = tierForAnyCode(code);
+  return tier === 'lite' ? null : tier;
+};

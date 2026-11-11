@@ -76,7 +76,7 @@ test('edge profiles do not break: 16, 54, 55, 64, 70, 90, zero balances', () => 
 
 // ── Workspace and Adviser ──────────────────────────────────────────────────
 import { stressTests, yearRows, toCsv, summarise } from '../src/model/plan.js';
-import { tierForGateCode, tierForUpgradeCode, GATE_PASSWORDS, TIER_PASSWORDS } from '../src/entitlements/gate.js';
+import { tierForGateCode, tierForUpgradeCode, tierForAnyCode, GATE_PASSWORDS, TIER_PASSWORDS } from '../src/entitlements/gate.js';
 
 test('stress tests change one assumption each and never raise income by making things worse', () => {
   const { base, cases } = stressTests({}, NOW);
@@ -107,4 +107,6 @@ test('access and upgrade codes map to the right plans', () => {
   assert.equal(tierForUpgradeCode(TIER_PASSWORDS.plus), 'plus');
   assert.equal(tierForUpgradeCode(TIER_PASSWORDS.pro), 'pro');
   assert.equal(tierForUpgradeCode('nope'), null);
+  assert.equal(tierForUpgradeCode(GATE_PASSWORDS.beta), null);
+  assert.deepEqual([GATE_PASSWORDS.beta, TIER_PASSWORDS.plus, TIER_PASSWORDS.pro, GATE_PASSWORDS.admin, 'nope', ''].map(tierForAnyCode), ['lite', 'plus', 'pro', 'pro', null, null]);
 });

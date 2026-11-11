@@ -6,6 +6,9 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 2.3.1 — 12 Nov 2026
+- The planner's access screen accepts all four beta codes: the Workspace code opens Workspace and the Adviser code opens Adviser directly.
+
 ## 2.3.0 — 11 Nov 2026
 - Version number, build id and build date shown in the planner, website footer and `/healthz`.
 - Sign out button in the planner header and footer, and on the website (shown in place of Sign in once signed in). Saved plans and client files stay on the device.
