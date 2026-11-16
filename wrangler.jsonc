@@ -20,5 +20,10 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "fusion2", "database_id": "495de0ab-896f-42af-8ab8-0088fdeb9d12" }
   ],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Branch previews (Cloudflare Worker Previews, built by `npx wrangler preview` on every push to a
+  // branch other than main). Previews never inherit the settings above: no database and no
+  // SESSION_SECRET, so accounts are off there (the planner falls back to access codes) and a
+  // preview can never touch live accounts. Point a preview at a separate test database if needed.
+  "previews": {}
 }

@@ -6,6 +6,11 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.4.0-studio.2 — 16 Nov 2026
+Preview builds for the `studio` branch. No change to the app or to calculations.
+- `wrangler.jsonc` gains an empty `previews` section, which Cloudflare Worker Previews need. Production settings are unchanged.
+- On a preview, accounts are off (no database or session secret there), so sign-in is hidden and access codes work; live accounts cannot be reached from a preview.
+
 ## 3.4.0-studio.1 — 16 Nov 2026
 Fusion Studio, Phase 0 (preview on the `studio` branch only; not on the live site). No change to calculations.
 - **Fusion Studio** at `/app/studio/`, for Workspace and Adviser: your CPF life told in chapters (Today, Building, Family, Home, Turning 55, Payout, Later life, Legacy, My plan). Guided users and visitors without a plan see a short note and a way back.
