@@ -8,7 +8,8 @@ import { useMemo, useState } from 'react';
 import { buildPlan, summarise, stressTests, yearRows, toCsv } from '../model/plan.js';
 import { PLAN_RANK, tierName } from '../entitlements/tiers.js';
 import { tierForUpgradeCode } from '../entitlements/gate.js';
-import { download, cleanState } from './storage.js';
+import { download } from './storage.js';
+import { buildHousehold } from '../model/household.js';
 import { money, pct, Slider } from './ui.jsx';
 
 const has = (tier, need) => (PLAN_RANK[tier] ?? 0) >= PLAN_RANK[need];
@@ -240,112 +241,43 @@ export function UpgradeCode({ tier, onTier }) {
   );
 }
 
-/* ── Adviser: client files ────────────────────────────────────────────────── */
-export function ClientsView({ book, setBook, clientId, onOpen, onAdd, onClose, onDeleted }) {
-  const [name, setName] = useState(''), [msg, setMsg] = useState(null);
-  const add = (e) => { e.preventDefault(); if (name.trim()) { onAdd(name.trim().slice(0, 40)); setName(''); } };
-  const remove = (c) => {
-    if (!window.confirm(`Delete ${c.name}'s file from this device? This cannot be undone.`)) return;
-    setBook((b) => ({ ...b, clients: b.clients.filter((x) => x.id !== c.id) })); onDeleted(c.id);
-  };
-  const rename = (c) => {
-    const n = window.prompt('Client name', c.name);
-    if (n && n.trim()) setBook((b) => ({ ...b, clients: b.clients.map((x) => (x.id === c.id ? { ...x, name: n.trim().slice(0, 40) } : x)) }));
-  };
-  const restore = async (e) => {
-    const file = e.target.files?.[0]; e.target.value = '';
-    if (!file) return;
-    try {
-      const raw = JSON.parse(await file.text());
-      if (!raw || raw.kind !== 'fusion-clients' || !Array.isArray(raw.clients)) throw new Error('not a backup');
-      const incoming = raw.clients.filter((c) => c && typeof c.id === 'string').map((c) => ({ id: c.id, name: String(c.name || 'Client').slice(0, 40), notes: String(c.notes || ''), updated: String(c.updated || ''), state: cleanState(c.state) }));
-      setBook((b) => {
-        const ids = new Set(incoming.map((c) => c.id));
-        return { adviser: b.adviser.name || b.adviser.firm ? b.adviser : { name: String(raw.adviser?.name || ''), firm: String(raw.adviser?.firm || '') }, clients: [...b.clients.filter((c) => !ids.has(c.id)), ...incoming] };
-      });
-      setMsg({ ok: true, text: `Restored ${incoming.length} client file${incoming.length === 1 ? '' : 's'}.` });
-    } catch { setMsg({ ok: false, text: 'That file is not a Fusion client backup.' }); }
-  };
-  const backup = () => download(`fusion-clients-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ kind: 'fusion-clients', v: 1, ...book }, null, 1), 'application/json');
-  const setAdviser = (patch) => setBook((b) => ({ ...b, adviser: { ...b.adviser, ...patch } }));
-  return (
-    <>
-      <section className="lead compact">
-        <p className="eyebrow">Adviser</p>
-        <h1>Client files</h1>
-        <p className="muted">Files are kept on this device only and are not uploaded. Download a backup regularly, and before clearing your browser data.</p>
-      </section>
-
-      <section className="panel">
-        <ul className="clients">
-          <li className={!clientId ? 'on' : ''}>
-            <div><b>My plan</b><span className="small muted">Your own figures, separate from client files</span></div>
-            <button type="button" className="btn btn-secondary" onClick={() => onOpen(null)}>{!clientId ? 'Open (current)' : 'Open'}</button>
-          </li>
-          {book.clients.map((c) => (
-            <li key={c.id} className={c.id === clientId ? 'on' : ''}>
-              <div><b>{c.name}</b><span className="small muted">{c.state.done ? `Updated ${c.updated.slice(0, 10)}` : 'Setup not finished'}</span></div>
-              <span className="cell-actions">
-                <button type="button" className="link" onClick={() => rename(c)}>Rename</button>
-                <button type="button" className="link danger" onClick={() => remove(c)}>Delete</button>
-                <button type="button" className="btn btn-secondary" onClick={() => onOpen(c.id)}>{c.id === clientId ? 'Open (current)' : 'Open'}</button>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <form className="save-row" onSubmit={add}>
-          <label className="fld" htmlFor="cl-name"><span className="field-label">New client</span>
-            <input id="cl-name" value={name} maxLength={40} placeholder="Name or reference" onChange={(e) => setName(e.target.value)} /></label>
-          <button type="submit" className="btn btn-primary" disabled={!name.trim()}>Add client</button>
-        </form>
-      </section>
-
-      <section className="panel">
-        <h2>On your reports</h2>
-        <div className="fields two">
-          <label className="fld" htmlFor="ad-name"><span className="field-label">Your name</span><input id="ad-name" value={book.adviser.name} maxLength={60} onChange={(e) => setAdviser({ name: e.target.value })} /></label>
-          <label className="fld" htmlFor="ad-firm"><span className="field-label">Firm and licence details</span><input id="ad-firm" value={book.adviser.firm} maxLength={100} onChange={(e) => setAdviser({ firm: e.target.value })} /></label>
-        </div>
-      </section>
-
-      <section className="panel">
-        <h2>Backup</h2>
-        <div className="btn-row">
-          <button type="button" className="btn btn-secondary" onClick={backup} disabled={book.clients.length === 0}>Download backup</button>
-          <label className="btn btn-secondary file-btn">Restore from backup<input type="file" accept="application/json,.json" onChange={restore} /></label>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Back to plan</button>
-        </div>
-        {msg && <p className={msg.ok ? 'gain' : 'error'} role="status">{msg.text}</p>}
-        <p className="small muted">A backup contains your clients&rsquo; financial details. Store it as you would any client record.</p>
-      </section>
-    </>
-  );
-}
-
 /* ── Report (print or save as PDF) ────────────────────────────────────────── */
-export function ReportView({ plan, base, answers, scenarios, now, tier, client, adviser, setNotes, onBack }) {
+/**
+ * Workspace: a plain report. Adviser: the same with the firm's logo and colour, a recommendation
+ * with its basis, and "Issue report", which adds a dated entry to the client's advice record.
+ */
+export function ReportView({ plan, base, answers, scenarios, now, tier, client, adviser, patchClient, onIssue, onBack }) {
   const stress = useMemo(() => stressTests(plan.answers, now), [plan.answers, now]);
+  const hh = useMemo(() => buildHousehold(plan.answers, now), [plan.answers, now]);
   if (!has(tier, 'plus')) return null;
-  const pro = tier === 'pro';
+  const pro = tier === 'pro', joint = !!hh.partner, s = plan.sale;
   const cols = [{ name: 'Starting plan', s: summarise(base) }, ...scenarios.map((sc) => ({ name: sc.name, s: summarise(buildPlan({ ...answers, ...sc.tried }, now)) }))];
   const a = plan.assumptions, started = plan.age >= plan.payoutAge;
+  const accent = pro ? adviser.accent : undefined;
+  const issue = () => { onIssue(); window.setTimeout(() => window.print(), 50); };
   return (
     <>
       <div className="btn-row no-print">
         <button type="button" className="btn btn-secondary" onClick={onBack}>← Back</button>
-        <button type="button" className="btn btn-primary" onClick={() => window.print()}>Print or save as PDF</button>
+        {pro && client
+          ? <><button type="button" className="btn btn-primary" onClick={issue}>Issue report</button><span className="small muted">Prints or saves as PDF, and adds today&rsquo;s figures and recommendation to {client.name}&rsquo;s advice record.</span></>
+          : <button type="button" className="btn btn-primary" onClick={() => window.print()}>Print or save as PDF</button>}
       </div>
-      <article className="panel report">
-        <header>
-          <p className="eyebrow">CPF retirement estimate · {now.toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-          <h1>{client ? `Prepared for ${client.name}` : 'Your CPF retirement plan'}</h1>
-          {pro && (adviser.name || adviser.firm) && <p className="muted">Prepared by {[adviser.name, adviser.firm].filter(Boolean).join(', ')}</p>}
+      <article className="panel report" style={accent ? { '--report-accent': accent } : undefined}>
+        <header className="report-head">
+          {pro && adviser.logo && <img className="report-logo" src={adviser.logo} alt="" />}
+          <div>
+            <p className="eyebrow">CPF retirement estimate · {now.toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <h1>{client ? `Prepared for ${client.name}` : 'Your CPF retirement plan'}</h1>
+            {pro && (adviser.name || adviser.firm) && <p className="muted">Prepared by {[adviser.name, adviser.firm].filter(Boolean).join(', ')}</p>}
+          </div>
         </header>
 
         <h2>The answer</h2>
         <p className="report-lead">{started ? 'CPF LIFE' : `From age ${plan.payoutAge}, CPF LIFE`} is estimated to pay about <b>{money(plan.payoutToday)} a month for life</b>, in today&rsquo;s dollars{started ? '' : ` (${money(plan.payout)} a month in ${plan.yearPayout})`}.
           {plan.oaMonthlyToday > 0 && <> Ordinary Account savings could add {money(plan.oaMonthlyToday)} a month if spread to age 90; this part is not guaranteed for life.</>}
-          {plan.target > 0 && (plan.gapToday > 0 ? <> Against a target of {money(plan.target)} a month, the gap is <b>{money(plan.gapToday)} a month</b>.</> : <> This meets the target of {money(plan.target)} a month.</>)}</p>
+          {plan.otherMonthlyToday > 0 && <> The home sale could add {money(plan.otherMonthlyToday)} a month if spread to age 90.</>}
+          {!joint && plan.target > 0 && (plan.gapToday > 0 ? <> Against a target of {money(plan.target)} a month, the gap is <b>{money(plan.gapToday)} a month</b>.</> : <> This meets the target of {money(plan.target)} a month.</>)}</p>
         <table className="data">
           <tbody>
             <tr><th scope="row">Age today</th><td>{plan.age}</td></tr>
@@ -355,6 +287,34 @@ export function ReportView({ plan, base, answers, scenarios, now, tier, client, 
             <tr><th scope="row">Readiness</th><td>{plan.score} / 100 · {plan.label}</td></tr>
           </tbody>
         </table>
+
+        {joint && <>
+          <h2>Household</h2>
+          <table className="data">
+            <thead><tr><th scope="col"><span className="visually-hidden">Measure</span></th><th scope="col">Client</th><th scope="col">Partner</th><th scope="col">Together</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Monthly income</th><td>{money(hh.you.incomeToday)}</td><td>{money(hh.partner.incomeToday)}</td><td>{money(hh.incomeToday)}</td></tr>
+              <tr><th scope="row">CPF LIFE, for life</th><td>{money(hh.you.payoutToday)}</td><td>{money(hh.partner.payoutToday)}</td><td>{money(hh.lifeToday)}</td></tr>
+              <tr><th scope="row">Payouts start</th><td>{hh.you.yearPayout}</td><td>{hh.partner.yearPayout}</td><td>Both by {hh.yearBoth}</td></tr>
+            </tbody>
+          </table>
+          {hh.target > 0 && <p>{hh.gapToday > 0 ? <>Against a household target of {money(hh.target)} a month, the gap is <b>{money(hh.gapToday)} a month</b>.</> : <>Together this meets the household target of {money(hh.target)} a month.</>} A payout stops when that person dies.</p>}
+        </>}
+
+        {s && s.refund !== null && <>
+          <h2>Home sale at {s.age}</h2>
+          <table className="data">
+            <tbody>
+              <tr><th scope="row">Sale price in {s.year}</th><td>{money(s.price)}</td></tr>
+              {s.loanOwed > 0 && <tr><th scope="row">Home loan repaid</th><td>− {money(s.loanOwed)}</td></tr>}
+              {s.nextCost > 0 && <tr><th scope="row">Next home</th><td>− {money(s.nextCost)}</td></tr>}
+              {s.shb && <tr><th scope="row">Committed to Retirement Account / Silver Housing Bonus (cash)</th><td>− {money(s.committed)} / + {money(s.bonus)}</td></tr>}
+              <tr><th scope="row">{s.resources >= 0 ? 'Left over (in CPF / cash in hand)' : 'Shortfall'}</th><td>{s.resources >= 0 ? `${money(s.resources)} (${money(s.inCpf)} / ${money(s.cash)})` : money(-s.resources)}</td></tr>
+            </tbody>
+          </table>
+          <p className="small muted">CPF to be returned on sale: {money(s.refund)} (amount used plus 2.5% a year interest). Selling costs and stamp duty are not included. HDB confirms any Silver Housing Bonus on application.</p>
+        </>}
+
         {plan.watch.length > 0 && <><h2>Watch out</h2><ul>{plan.watch.map((w) => <li key={w.key}>{w.text}</li>)}</ul></>}
 
         {cols.length > 1 && <>
@@ -372,9 +332,14 @@ export function ReportView({ plan, base, answers, scenarios, now, tier, client, 
         </table>
 
         {pro && client && <>
-          <h2>Adviser notes</h2>
-          <textarea className="notes no-print" rows={4} value={client.notes} maxLength={2000} placeholder="Notes for this client. They print on the report." onChange={(e) => setNotes(e.target.value)} aria-label="Adviser notes" />
-          <p className="print-only notes-print">{client.notes || '—'}</p>
+          <h2>Recommendation</h2>
+          <textarea className="notes no-print" rows={3} value={client.recommendation} maxLength={2000} placeholder="What you recommend. Prints on the report and is kept in the advice record." onChange={(e) => patchClient({ recommendation: e.target.value })} aria-label="Recommendation" />
+          <p className="print-only notes-print">{client.recommendation || '—'}</p>
+          <h2>Basis for the recommendation</h2>
+          <textarea className="notes no-print" rows={3} value={client.basis} maxLength={2000} placeholder="Why: the client's needs, the figures relied on, alternatives considered." onChange={(e) => patchClient({ basis: e.target.value })} aria-label="Basis for the recommendation" />
+          <p className="print-only notes-print">{client.basis || '—'}</p>
+          <h2 className="no-print">Private notes</h2>
+          <textarea className="notes no-print" rows={3} value={client.notes} maxLength={2000} placeholder="For your file only. These do not print." onChange={(e) => patchClient({ notes: e.target.value })} aria-label="Private notes" />
         </>}
 
         <h2>Assumptions</h2>
@@ -383,8 +348,13 @@ export function ReportView({ plan, base, answers, scenarios, now, tier, client, 
           <li>CPF interest at today&rsquo;s rates. Contribution rates as published for 2026 and 2027.</li>
           <li>CPF LIFE figures are estimates matched to CPF Board&rsquo;s published payouts. CPF Board sets the actual payout when it starts.</li>
         </ul>
-        <p className="small muted">An estimate for planning, based on the figures entered. It is not financial advice, not a recommendation to buy any product, and not a statement from CPF Board. Fusion 富生 is not affiliated with CPF Board.</p>
+        <p className="small muted">An estimate for planning, based on the figures entered. {pro && client ? 'Any recommendation above is the adviser’s own. ' : 'It is not financial advice or a recommendation to buy any product. '}It is not a statement from CPF Board. Fusion 富生 is not affiliated with CPF Board.</p>
       </article>
+
+      {pro && client && client.log.length > 0 && <section className="panel no-print">
+        <h2>Advice record</h2>
+        <ol className="log-list">{client.log.map((e) => <li key={e.at}><b>{new Date(e.at).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}</b> · {money(e.income)} a month{e.target > 0 ? ` against ${money(e.target)}` : ''} · readiness {e.score}{e.by ? ` · ${e.by}` : ''}{e.recommendation ? <><br /><span className="muted">{e.recommendation}</span></> : null}</li>)}</ol>
+      </section>}
     </>
   );
 }

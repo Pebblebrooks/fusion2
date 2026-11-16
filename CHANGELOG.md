@@ -6,6 +6,14 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.1.0 — 16 Nov 2026
+Adviser tools. Guided, Workspace and the engine are unchanged.
+- **Client book:** Adviser opens on the client list. Each client shows monthly income against target, readiness, tags and next review date, with search, tag filter, sorting and a flag on overdue reviews. "My plan" is kept as an entry in the list.
+- **Meeting mode:** a client's plan as large, read-only pages (where you stand, each of you, your home, what would help most, what this assumes). No other client's data and no adviser notes are shown. Arrow keys move between pages; Esc ends.
+- **Branded report:** firm logo (PNG, JPEG or WebP under 200 KB), report colour, adviser name and firm; household and home-sale sections; recommendation and its basis.
+- **Advice record:** "Issue report" prints the report and keeps a dated entry of the figures and recommendation for that client. Included in backups.
+- Client files from earlier versions and v1 backups still open. A warning shows if the device's storage is full.
+
 ## 3.0.0 — 16 Nov 2026
 Workspace and Adviser now open on a household dashboard with planning modules, so the paid plans are clearly different from Guided.
 - **Overview:** household headline, income against the target, readiness and one card per module.

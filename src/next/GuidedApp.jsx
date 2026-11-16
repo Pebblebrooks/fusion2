@@ -14,7 +14,10 @@ import { VERSION_LABEL } from '../version.js';
 import SavingsChart from './Chart.jsx';
 import { IncomeBar, OverviewView, HouseholdView, PropertyView, TopUpsView, ConfidenceView } from './Modules.jsx';
 import { money, pct, Help, MoneyField, Choice, Slider } from './ui.jsx';
-import { CompareView, WorkspaceDetails, Assumptions, ClientsView, ReportView, UpgradeCode, PreviewSwitch } from './Workspace.jsx';
+import { CompareView, WorkspaceDetails, Assumptions, ReportView, UpgradeCode, PreviewSwitch } from './Workspace.jsx';
+import { ClientsView, MeetingView } from './Adviser.jsx';
+import { newClient, withLogEntry } from '../model/clients.js';
+import { buildHousehold } from '../model/household.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const LIFE_PLANS = [
@@ -355,7 +358,8 @@ export default function GuidedApp() {
   const [book, setBook] = useState(loadBook);
   const [clientId, setClientId] = useState(null);
   const [state, setState] = useState(() => loadPlan() || EMPTY);
-  const [tab, setTab] = useState('plan');
+  const [tab, setTab] = useState(() => (currentTier() === 'pro' ? 'clients' : 'plan')); // advisers land on their client list
+  const [saved, setSaved] = useState(true); // false when the browser could not store the client book
   const [theme, setThemeState] = useState(getTheme);
   const { answers, tried, done, scenarios } = state;
   const client = clientId ? book.clients.find((c) => c.id === clientId) : null;
@@ -366,7 +370,7 @@ export default function GuidedApp() {
     if (clientId) setBook((b) => ({ ...b, clients: b.clients.map((c) => (c.id === clientId ? { ...c, state, updated: new Date().toISOString() } : c)) }));
     else savePlan(state);
   }, [state, done, clientId]);
-  useEffect(() => { saveBook(book); }, [book]);
+  useEffect(() => { setSaved(saveBook(book)); }, [book]);
   useEffect(() => { window.scrollTo(0, 0); }, [tab]);
 
   const now = useMemo(() => new Date(), []);
@@ -377,7 +381,7 @@ export default function GuidedApp() {
   const changed = WHAT_IF_KEYS.filter((k) => tried[k] !== undefined && tried[k] !== answers[k]).length;
   const plan = useMemo(() => (done ? (changed ? buildPlan({ ...calc, ...tried }, now) : base) : null), [calc, tried, done, base, changed, now]);
 
-  if (!ownTier) return <Gate onPass={setTier} />;
+  if (!ownTier) return <Gate onPass={(t) => { setTier(t); if (t === 'pro') setTab('clients'); }} />;
 
   const setAnswer = (patch) => setState((s) => ({ ...s, answers: { ...s.answers, ...patch }, tried: {} }));
   const setTried = (fn) => setState((s) => ({ ...s, tried: typeof fn === 'function' ? fn(s.tried) : fn }));
@@ -394,10 +398,17 @@ export default function GuidedApp() {
     setClientId(id || null); setState(c ? c.state : loadPlan() || EMPTY); setTab('plan');
   };
   const addClient = (name) => {
-    const c = { id: newId(), name, notes: '', updated: new Date().toISOString(), state: EMPTY };
+    const c = newClient(newId(), name, new Date().toISOString());
     setBook((b) => ({ ...b, clients: [...b.clients, c] })); setClientId(c.id); setState(EMPTY); setTab('plan');
   };
   const pro = tier === 'pro';
+  const patchClient = (change) => setBook((b) => ({ ...b, clients: b.clients.map((c) => (c.id === clientId ? { ...c, ...change } : c)) }));
+  const issueReport = () => setBook((b) => ({ ...b, clients: b.clients.map((c) => (c.id === clientId ? withLogEntry(c, plan, buildHousehold(plan.answers, now), b.adviser.name, new Date().toISOString()) : c)) }));
+  const startMeeting = (id) => {
+    const c = id ? book.clients.find((x) => x.id === id) : null;
+    setClientId(id || null); setState(c ? c.state : loadPlan() || EMPTY); setTab('meeting');
+  };
+  if (pro && tab === 'meeting' && done && plan) return <MeetingView plan={plan} moves={moves} name={client ? client.name : ''} now={now} onExit={() => setTab('clients')} />;
   const showTabs = done && tab !== 'clients' && tab !== 'report';
   // The screen to show for this plan: Guided has Plan; Workspace and Adviser have Overview and modules.
   const view = !work && WORK_ONLY.includes(tab) ? 'plan' : work && tab === 'plan' ? 'overview' : tab;
@@ -416,8 +427,9 @@ export default function GuidedApp() {
 {done && tab !== 'report' && <nav className={`tabs ${work ? 'work' : ''}`} aria-label="Planner">{barTabs.map(navButton)}</nav>}
           <div className="header-actions">
             {pro
-              ? <button type="button" className={`client-btn ${tab === 'clients' ? 'on' : ''}`} onClick={() => setTab('clients')}><span className="visually-hidden">Client file: </span>{client ? client.name : 'My plan'} ▾</button>
+              ? <button type="button" className={`client-btn ${tab === 'clients' ? 'on' : ''}`} onClick={() => setTab('clients')} title="Client list"><span className="visually-hidden">Client file: </span>{client ? client.name : 'My plan'} ▾</button>
               : <span className="pill">{tierName(tier)}</span>}
+            {pro && done && showTabs && <button type="button" className="btn btn-secondary meet-btn" onClick={() => setTab('meeting')}>Meeting</button>}
             <button type="button" className="icon-btn" onClick={flip} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 {theme === 'dark' ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></> : <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />}
@@ -432,8 +444,8 @@ export default function GuidedApp() {
 
       {pro && tab === 'clients' ? (
         <main className="wrap main" id="main">
-          <ClientsView book={book} setBook={setBook} clientId={clientId} onOpen={openClient} onAdd={addClient} onClose={() => setTab('plan')}
-            onDeleted={(id) => { if (id === clientId) openClient(null); }} />
+          <ClientsView book={book} setBook={setBook} clientId={clientId} saved={saved} now={now} onOpen={openClient} onAdd={addClient} onMeeting={startMeeting}
+            onDeleted={(id) => { if (id === clientId) { setClientId(null); setState(loadPlan() || EMPTY); } }} />
         </main>
       ) : !done ? (
         <Setup key={clientId || 'me'} answers={answers} title={client ? `Setting up ${client.name}'s plan` : null} onDone={(a) => setState((s) => ({ ...s, answers: a, tried: {}, done: true }))} />
@@ -448,7 +460,7 @@ export default function GuidedApp() {
           {view === 'compare' && <CompareView tier={tier} base={base} plan={plan} answers={calc} tried={tried} changed={changed} scenarios={scenarios || []} setScenarios={setScenarios} setTried={setTried} now={now} go={setTab} />}
           {view === 'profile' && <ProfileView answers={answers} setAnswer={setAnswer} onRestart={restart} tier={tier} ownTier={ownTier} onTier={upgrade} onPreview={(t) => { setPreview(t === ownTier ? null : t); if (tab === 'clients' || tab === 'report') setTab('plan'); }} />}
           {view === 'report' && <ReportView plan={plan} base={base} answers={calc} scenarios={scenarios || []} now={now} tier={tier} client={client} adviser={book.adviser}
-            setNotes={(notes) => setBook((b) => ({ ...b, clients: b.clients.map((c) => (c.id === clientId ? { ...c, notes } : c)) }))} onBack={() => setTab('details')} />}
+            patchClient={patchClient} onIssue={issueReport} onBack={() => setTab('details')} />}
           {view === 'overview' && <OverviewView answers={calc} plan={plan} moves={moves} changed={changed} onReset={() => setTried({})} scenarios={scenarios || []} go={setTab} now={now} />}
           {view === 'household' && <HouseholdView answers={answers} setAnswer={setAnswer} now={now} />}
           {view === 'property' && <PropertyView answers={answers} setAnswer={setAnswer} plan={plan} now={now} />}

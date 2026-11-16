@@ -4,7 +4,10 @@
  *   fusion_gate_passed / fusion_plan — shared with the classic planner, so one access code covers both
  */
 import { encodePlanState } from '../state/shareLink.js';
-import { DEFAULT_ANSWERS, toEngineInputs } from '../model/plan.js';
+import { toEngineInputs } from '../model/plan.js';
+import { cleanState, cleanBook } from '../model/clients.js';
+
+export { cleanState };
 
 const PLAN_KEY = 'fusion_guided_plan_v1';
 const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -49,31 +52,11 @@ export const setTheme = (mode) => {
 export const classicLink = (answers, now = new Date()) =>
   `/app/classic/?p=${encodePlanState(JSON.stringify({ appVersion: 'V4-2026', inputs: toEngineInputs(answers, now) }))}`;
 
-/* ── Adviser: client files, kept on this device ─────────────────────────────
-   fusion_clients_v1 = { adviser: { name, firm }, clients: [{ id, name, notes, updated, state }] }
-   `state` has the same shape as the personal plan: { answers, tried, done, scenarios }. */
+/* ── Adviser: client files, kept on this device (shape and checks in src/model/clients.js) ── */
 const CLIENTS_KEY = 'fusion_clients_v1';
-const clean = (state) => {
-  const answers = { ...DEFAULT_ANSWERS };
-  for (const k of Object.keys(DEFAULT_ANSWERS)) if (state?.answers && typeof state.answers[k] === typeof DEFAULT_ANSWERS[k]) answers[k] = state.answers[k];
-  return {
-    answers, done: !!state?.done,
-    tried: state?.tried && typeof state.tried === 'object' ? state.tried : {},
-    scenarios: Array.isArray(state?.scenarios) ? state.scenarios.filter((s) => s && typeof s.name === 'string' && s.tried && typeof s.tried === 'object').slice(0, 4) : [],
-  };
-};
-export const cleanState = clean;
-export const loadBook = () => {
-  try {
-    const raw = JSON.parse(get(CLIENTS_KEY) || 'null');
-    if (!raw || !Array.isArray(raw.clients)) return { adviser: { name: '', firm: '' }, clients: [] };
-    return {
-      adviser: { name: String(raw.adviser?.name || ''), firm: String(raw.adviser?.firm || '') },
-      clients: raw.clients.filter((c) => c && typeof c.id === 'string').map((c) => ({ id: c.id, name: String(c.name || 'Client'), notes: String(c.notes || ''), updated: String(c.updated || ''), state: clean(c.state) })),
-    };
-  } catch { return { adviser: { name: '', firm: '' }, clients: [] }; }
-};
-export const saveBook = (book) => set(CLIENTS_KEY, JSON.stringify({ v: 1, ...book }));
+export const loadBook = () => { try { return cleanBook(JSON.parse(get(CLIENTS_KEY) || 'null')); } catch { return cleanBook(null); } };
+/** Returns false when the browser refuses to store the book (usually: storage is full). */
+export const saveBook = (book) => { try { localStorage.setItem(CLIENTS_KEY, JSON.stringify({ v: 2, ...book })); return true; } catch { return false; } };
 export const newId = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /** Download text as a file (CSV, JSON backup). */
