@@ -6,6 +6,12 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.3.1 — 16 Nov 2026
+Classic planner layout only; no change to calculations.
+- Wide screens (three input columns): the Quick Start / Full switch now spans all columns, so the columns start side by side under their header buttons. Previously it took the first column and pushed the others along, sending the third column to the bottom of the page in Full view. The same applies to the two-column tablet layout.
+- The three column header buttons now show their names (Profile & Contributions, Outflows & Boosts, Wealth & Scenarios) and keep their colour when open, so they no longer look blank.
+- Citizenship options wrap onto a second line in narrow columns instead of cutting off "Foreigner".
+
 ## 3.3.0 — 16 Nov 2026
 Accounts, proof of concept. Engine and planner screens unchanged.
 - **Accounts:** create an account and sign in with email and password. Stored in Cloudflare D1 (`fusion2`); passwords hashed with PBKDF2-SHA-256 and a per-user salt; signed, HttpOnly session cookie for 30 days; 15-minute lock after 10 wrong passwords.

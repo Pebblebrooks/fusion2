@@ -15221,7 +15221,8 @@ ${milestoneSnapshotHtml}
                         background: anyOpen ? solid : "rgba(100,116,139,0.05)",
                         transition: "all 0.15s ease" }}>
                       <ChevronDown className={`sidebar-chevron${anyOpen ? " open" : ""}`}
-                        style={{ width: 12, height: 12, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65 }} />
+                        style={{ width: 12, height: 12, color: clr, opacity: anyOpen ? 0.95 : 0.7, flexShrink: 0 }} />
+                      <span className="fhd-col-label" style={{ fontSize: 11, fontWeight: 700, color: clr, opacity: anyOpen ? 1 : 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
                     </button>
                   );
                 }
@@ -15250,7 +15251,8 @@ ${milestoneSnapshotHtml}
                       border: `1px solid ${anyOpen ? bdr : "rgba(100,116,139,0.2)"}`,
                       background: anyOpen ? solid : "rgba(100,116,139,0.05)", transition: "all 0.15s ease" }}>
                     <ChevronDown className={`sidebar-chevron${anyOpen ? " open" : ""}`}
-                      style={{ width: 12, height: 12, color: anyOpen ? "#fff" : clr, opacity: anyOpen ? 0.9 : 0.65 }} />
+                      style={{ width: 12, height: 12, color: clr, opacity: anyOpen ? 0.95 : 0.7, flexShrink: 0 }} />
+                    <span className="fhd-col-label" style={{ fontSize: 11, fontWeight: 700, color: clr, opacity: anyOpen ? 1 : 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
                   </button>
                 );
 
@@ -15289,7 +15291,9 @@ ${milestoneSnapshotHtml}
           </div>
           <div className={`cpf-sidebar-inner${sidebarOpen ? "" : " sidebar-collapsed"}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {/* Sprint-6 Item 31: Quick Start / Full View mode toggle */}
-            <div style={{ display: "flex", gap: 4, padding: "6px 8px", background: "var(--bg-panel)", borderRadius: 12, border: "1px solid var(--border-subtle)", margin: "2px 0 2px", alignItems: "center" }}>
+            {/* gridColumn: spans every column when the sidebar is a grid (FHD 3 columns, tablet 2),
+                so the input columns below start side by side under their header buttons. */}
+            <div style={{ display: "flex", gap: 4, padding: "6px 8px", background: "var(--bg-panel)", borderRadius: 12, border: "1px solid var(--border-subtle)", margin: "2px 0 2px", alignItems: "center", gridColumn: "1 / -1" }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-subtle)", textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 4, flexShrink: 0 }}>View</span>
               {[{ id: true, label: "Quick Start" }, { id: false, label: "Full" }].map(({ id, label }) => (
                 <button key={String(id)} onClick={() => setQuickStartMode(id)}
@@ -15514,7 +15518,7 @@ ${milestoneSnapshotHtml}
                   {/* Citizenship status — global gate for MRSS, MMSS, PR tenure warnings, and foreigner CPF lock */}
                   <div style={{ padding: "10px 12px", borderRadius: 10, background: isForeigner ? "rgba(var(--clr-amber-rgb),0.06)" : "var(--bg-muted)", border: `1px solid ${isForeigner ? "rgba(var(--clr-amber-rgb),0.35)" : "var(--border-subtle)"}` }}>
                     {/* Row 1: SC / PR / Foreigner toggle */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: (inputs.citizenStatus || 'SC') === 'PR' || isForeigner ? 8 : 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6, marginBottom: (inputs.citizenStatus || 'SC') === 'PR' || isForeigner ? 8 : 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: isForeigner ? "var(--clr-amber)" : "var(--text-highlight)", textTransform: "uppercase" }}>Citizenship</span>
                         <TooltipBox id="t-citizenship" text="Select SC (Singapore Citizen), PR (Permanent Resident), or Foreigner. SC/PR have CPF accounts — all CPF schemes, contributions, and top-ups apply. Foreigners have no CPF — all CPF sections are locked. Foreigners can use SRS (up to $35,700/yr), Property, and Private Assets. MRSS and MMSS are SC-only." />
