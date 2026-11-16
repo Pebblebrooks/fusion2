@@ -2,15 +2,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_ANSWERS, buildPlan } from '../src/model/plan.js';
-import { CHAPTERS, cleanStudio, todayScene, chapterWhen } from '../src/model/studio.js';
+import { CHAPTERS, cleanStudio, todayScene, chapterWhen, buildingScene, turning55Scene, payoutScene, sumsForYear,
+  makeMove, undoMove, myPlanScene, nextChapter, prevChapter } from '../src/model/studio.js';
+import { interpolateCpfLife, raAtPayoutStart } from '../src/engine/cpfLife.js';
 import { cleanState } from '../src/model/clients.js';
 
 const NOW = new Date('2026-11-16T12:00:00+08:00');
 const plan = (over = {}) => buildPlan({ ...DEFAULT_ANSWERS, ...over }, NOW);
 
-test('chapters run in life order and end with My plan; only Today is built in Phase 0', () => {
+test('chapters run in life order and end with My plan; Phase 1 builds the core story', () => {
   assert.deepEqual(CHAPTERS.map((c) => c.id), ['today', 'building', 'family', 'home', 'turning55', 'payout', 'later', 'legacy', 'plan']);
-  assert.deepEqual(CHAPTERS.filter((c) => c.ready).map((c) => c.id), ['today']);
+  assert.deepEqual(CHAPTERS.filter((c) => c.ready).map((c) => c.id), ['today', 'building', 'turning55', 'payout', 'plan']);
+  // Next / back skip chapters not built yet
+  assert.equal(nextChapter('building').id, 'turning55');
+  assert.equal(nextChapter('payout').id, 'plan');
+  assert.equal(nextChapter('plan'), null);
+  assert.equal(prevChapter('turning55').id, 'building');
+  assert.equal(prevChapter('today'), null);
   for (const c of CHAPTERS) assert.match(c.question, /\?$/, `${c.id} opens with a question`);
 });
 
@@ -24,6 +32,7 @@ test('cleanStudio: defaults, unknown chapters, and moves limited to known answer
   ] });
   assert.equal(s.moves.length, 1);
   assert.deepEqual(s.moves[0].change, { topUpYearly: 8000 }); // unknown key and wrong type dropped
+  assert.deepEqual(s.moves[0].before, {});
   assert.equal(cleanStudio({ moves: Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, label: 'x' })) }).moves.length, 20);
 });
 
@@ -94,4 +103,70 @@ test('savePlan: the planner keeps what Studio saved; Studio writes its own part'
   savePlan({ ...back, studio: { chapter: 'today', moves: [] } }, { from: 'studio' });
   assert.deepEqual(loadPlan().studio, { chapter: 'today', moves: [] });
   delete globalThis.localStorage; delete globalThis.document;
+});
+
+test('Building: money in, interest and money out add up to the balance at 55', () => {
+  for (const over of [{}, { birthYear: 1975, salary: 9000, oa: 150000, sa: 120000, ma: 60000, housingMonthly: 1200 }, { status: 'PR1', topUpYearly: 8000 }]) {
+    const p = plan(over), b = buildingScene(p);
+    assert.equal(b.until, 55);
+    const sum = b.totalNow + b.moneyIn + b.interest - b.out;
+    assert.ok(Math.abs(sum - b.endNominal) / b.endNominal < 0.005, `reconciles within 0.5% (${sum} vs ${b.endNominal})`);
+    assert.ok(b.totalAt < b.endNominal, 'headline is in today\'s dollars');
+    assert.equal(b.series.at(-1).age, 54);
+  }
+  const late = buildingScene(plan({ birthYear: 1963, work: 'none', oa: 300000, sa: 200000, ma: 70000 }));
+  assert.equal(late.until, 65); // past 55: builds to the payout age
+});
+
+test('Turning 55: retirement sums, the S$5,000 rule and what can be taken out', () => {
+  assert.deepEqual(sumsForYear(2026, 0.03), { BRS: 110200, FRS: 220400, ERS: 440800, BHS: 79000 });
+  assert.equal(sumsForYear(2027, 0.03).FRS, 228200);
+  const t = turning55Scene(plan({ birthYear: 1975, salary: 9000, oa: 150000, sa: 120000, ma: 60000 }));
+  assert.equal(t.year55, 2030);
+  assert.equal(t.sums.FRS, 249360); // 2027 FRS S$228,200 grown 3% a year to 2030
+  assert.equal(t.sums.ERS, 2 * t.sums.FRS);
+  assert.ok(t.metFrs);
+  assert.equal(t.takeOut, t.savings - t.ra);
+  const short = turning55Scene(plan({ birthYear: 1975, salary: 2000, oa: 20000, sa: 15000, ma: 10000 }));
+  assert.ok(!short.metFrs);
+  assert.ok(short.takeOut <= 5000);
+  const done = turning55Scene(plan({ birthYear: 1963, work: 'none', oa: 300000, sa: 523000, ma: 70000 }));
+  assert.equal(done.done, true);
+  assert.equal(done.aboveErs, true);
+  assert.equal(done.room, 0);
+});
+
+test('Payout: CPF LIFE figures are the engine estimator figures for the Retirement Account at payout', () => {
+  const p = plan(), s = payoutScene(p);
+  const ra = raAtPayoutStart(p.rows.find((r) => r.age === 65));
+  for (const x of s.plans) assert.equal(x.nominal, Math.round(interpolateCpfLife(ra, x.key, true, 65)));
+  assert.equal(s.life, p.payoutToday);
+  assert.equal(s.income, s.life + s.oa + s.other);
+  assert.equal(s.income, p.incomeToday);
+});
+
+test('Moves: only real changes are kept, labelled in plain words, and can be undone', () => {
+  const a = { ...DEFAULT_ANSWERS };
+  assert.equal(makeMove('payout', { payoutAge: 65 }, a), null); // same as the plan: no move
+  const m = makeMove('payout', { payoutAge: 67, lifePlan: 'std', bogus: 1 }, a, '2026-11-16', 'm1');
+  assert.deepEqual(m.change, { payoutAge: 67 });
+  assert.deepEqual(m.before, { payoutAge: 65 });
+  assert.equal(m.label, 'Start CPF LIFE at 67');
+  assert.equal(makeMove('turning55', { topUpYearly: 8000 }, a).label, 'Top up S$8,000 a year in cash');
+  const applied = { ...a, ...m.change };
+  assert.equal(undoMove(applied, m).payoutAge, 65);
+  assert.equal(undoMove({ ...applied, payoutAge: 69 }, m).payoutAge, 69); // changed since: left alone
+});
+
+test('My plan: each move shows what it adds, worked out by re-running the plan without it', () => {
+  const a = { ...DEFAULT_ANSWERS };
+  const m1 = makeMove('payout', { payoutAge: 67 }, a, 't', 'm1');
+  const m2 = makeMove('turning55', { topUpYearly: 8000 }, a, 't', 'm2');
+  const p = buildPlan({ ...a, ...m1.change, ...m2.change }, NOW);
+  const s = myPlanScene(p, [m1, m2], NOW);
+  assert.equal(s.moves[0].gain, p.incomeToday - buildPlan({ ...a, ...m2.change }, NOW).incomeToday);
+  assert.ok(s.moves.every((x) => x.active && x.gain > 0));
+  const changed = myPlanScene(buildPlan({ ...a, ...m2.change, payoutAge: 69 }, NOW), [m1, m2], NOW);
+  assert.equal(changed.moves[0].active, false);
+  assert.equal(changed.moves[0].gain, 0);
 });

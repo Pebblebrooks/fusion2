@@ -76,10 +76,45 @@
 .st-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .st-foot { padding-bottom: 32px; }
 
+/* Try a change → save as a move */
+.st-levers .fld.pick { margin-top: 16px; }
+.st-trial { margin-top: 20px; padding: 14px 16px; border-radius: 12px; background: var(--brand-tint); display: grid; gap: 12px; }
+.st-trial p { margin: 0; line-height: 1.5; }
+.st-row.tight { margin-top: 0; gap: 8px; }
+.st-fact { margin: 0; display: grid; gap: 6px; font-size: 16px; }
+
+/* Retirement Account against the retirement sums */
+.st-meter { position: relative; padding-bottom: 46px; margin-top: 4px; }
+.st-meter-track { height: 18px; border-radius: 9px; background: var(--sunken); border: 1px solid var(--border); overflow: hidden; }
+.st-meter-fill { display: block; height: 100%; background: var(--s1); border-radius: 9px 0 0 9px; }
+.st-meter-mark { position: absolute; top: -4px; transform: translateX(-50%); display: grid; justify-items: center; }
+.st-meter-tick { width: 2px; height: 26px; background: var(--ink); }
+.st-meter-label { margin-top: 4px; font-size: 12px; color: var(--muted); display: grid; justify-items: center; white-space: nowrap; }
+.st-meter-label b { font: 600 13px var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.st-meter-mark:last-child { transform: translateX(-100%); justify-items: end; }
+
+/* My plan */
+.st-move-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.st-move-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px 16px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.st-move-list li:last-child { border-bottom: 0; }
+.st-move-list li.off .st-move-name { color: var(--muted); text-decoration: line-through; }
+.st-move-name { margin: 0 0 2px; font-weight: 600; }
+.st-move-list p { margin: 0; }
+.st-move-gain { font-size: 18px; white-space: nowrap; }
+.st-table tr.st-on th, .st-table tr.st-on td { font-weight: 700; }
+
+@media print {
+  .studio .app-header, .st-journey, .st-foot, .no-print, .st-next, .skip-link { display: none !important; }
+  .st-main { padding: 0; max-width: none; }
+  .panel { border-color: #999; }
+}
+
 @media (max-width: 760px) {
   .studio .st-back { display: none; }
   .st-lever-grid, .st-lever-grid.three { grid-template-columns: minmax(0, 1fr); }
   .st-how summary { padding: 0 16px; }
   .st-how-body { padding: 0 16px 16px; }
   .st-journey li { flex-basis: 84px; }
+  .st-move-list li { grid-template-columns: minmax(0, 1fr) auto; }
+  .st-move-list li .st-row { grid-column: 1 / -1; }
 }

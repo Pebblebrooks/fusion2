@@ -6,6 +6,16 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.4.0-studio.3 — 16 Nov 2026
+Fusion Studio, Phase 1: the core story (studio branch preview only). No change to calculations; every figure comes from the same engine as the planner.
+- **Building:** your CPF at 55 (or at payout age once past 55) in today's dollars, with the savings chart. Try a different pay rise or stop-work age. Show how: balances every five years, and money in, interest and money out, which add up to the balance at 55.
+- **Turning 55:** how much of the Full Retirement Sum your Retirement Account will hold, against the Basic, Full and Enhanced sums for your year, and what you can take out from 55 (savings above the Full sum, or up to S$5,000). After 55: room left for top-ups up to the Enhanced sum. Try yearly cash top-ups and Ordinary-to-Special transfers.
+- **Payout:** monthly income from your payout age: CPF LIFE (for life) and Ordinary Account income (to an age you choose) shown apart, with the income gap. Try a later start, another CPF LIFE plan, or spending the Ordinary Account to a different age. Show how: all three plans' first payouts.
+- **Save this move:** changes are tried first and kept only when saved. Saved moves change your plan (also in the planner) and drop any planner what-if on the same setting.
+- **My plan:** every saved move with what it adds to monthly income (the plan re-run without it), undo, and print.
+- **Today:** when not working, it now says so instead of "S$0 goes in", and the pay box is replaced by your work status.
+- Studio's code is split into Today, Chapters, My plan and shared parts, so no file grows too large.
+
 ## 3.4.0-studio.2 — 16 Nov 2026
 Preview builds for the `studio` branch. No change to the app or to calculations.
 - `wrangler.jsonc` gains an empty `previews` section, which Cloudflare Worker Previews need. Production settings are unchanged.
