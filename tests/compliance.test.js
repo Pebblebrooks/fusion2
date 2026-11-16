@@ -102,3 +102,68 @@ test('below 55, wage contributions keep going to the SA after it passes the Full
   // 230,000 + 4% interest (about 9,300) + 6,720 mandatory + MediSave overflow is redirected, so SA must exceed 245,000.
   assert.ok(rows[0].sa > 245000, `SA after one year: ${rows[0].sa}`);
 });
+
+// Source: HDB — Silver Housing Bonus (rules from 1 Dec 2025).
+test('Silver Housing Bonus is a cash bonus worked out from the amount committed to the RA', async () => {
+  const { silverHousingBonus, SHB } = await import('../src/policy/cpf2026.js');
+  assert.equal(silverHousingBonus({ committed: 60000 }), 30000);
+  assert.equal(silverHousingBonus({ committed: 40000 }), 20000);           // $1 for every $2
+  assert.equal(silverHousingBonus({ committed: 90000 }), 30000);           // only $60,000 counts
+  assert.equal(silverHousingBonus({ committed: 60000, nextFlat: '2r' }), 40000);
+  assert.equal(silverHousingBonus({ committed: 30000, nextFlat: '2r' }), 25000);
+  assert.equal(silverHousingBonus({ committed: 60000, higherAv: true }), 10000); // $1 for every $6
+  assert.equal(silverHousingBonus({ committed: 60000, higherAv: true, nextFlat: '2r' }), 20000);
+  assert.equal(SHB.minAge, 55);
+
+  const base = { ...DEFAULT_INPUTS, currentYear: 2026, currentMonth: 6, birthMonth: 6, currentAge: 60, saBalance: 100000, oaBalance: 0, maBalance: 50000,
+    salaryGross: 0, salaryBonus: 0, empOaCont: 0, empSaCont: 0, empMaCont: 0, housingOutflow: 0, currentPrivateAssets: 0, annualPrivateSaving: 0,
+    propMonetiseEnabled: true, propMonetiseAge: 62, propMonetiseCashProceeds: 100000, propMonetiseRaTopup: 60000 };
+  const at = (rows) => rows.find((r) => r.age === 62);
+  const plain = at(runProjectionEngine({ ...base, propMonetiseScheme: 'downgrade' }));
+  const shb = at(runProjectionEngine({ ...base, propMonetiseScheme: 'shb', shsToFlat: '3r' }));
+  assert.equal(Math.round(shb.ra), Math.round(plain.ra), 'the bonus is not credited to the Retirement Account');
+  assert.equal(Math.round(shb.propertyValue), Math.round(plain.propertyValue), 'the bonus does not come out of the property');
+  const extra = shb.privateAssets - plain.privateAssets;
+  assert.ok(extra >= 30000 && extra < 33000, `cash bonus added to private assets: ${extra}`);
+});
+
+// Source: CPF Board — "Selling your home: before vs after age 55"; housing refund FAQs.
+test('selling a home refunds CPF used plus 2.5% accrued interest; from 55 it first fills the RA to the Full Retirement Sum', () => {
+  const base = { ...DEFAULT_INPUTS, currentYear: 2026, currentMonth: 6, birthMonth: 6, dpsMode: 'optout', saBalance: 0, maBalance: 0,
+    salaryGross: 0, salaryBonus: 0, empOaCont: 0, empSaCont: 0, empMaCont: 0, housingOutflow: 0, medicalUsage: 0, annualGovGrant: 0,
+    propertyValue: 600000, includeProperty: true, housingCpfUsedToDate: 100000 };
+  // Below 55: refund goes to the Ordinary Account. 100,000 after two more years at 2.5% = 105,063.
+  const young = runProjectionEngine({ ...base, currentAge: 40, oaBalance: 0, sellPropertyAge: 42 });
+  const before = young.find((r) => r.age === 41), after = young.find((r) => r.age === 42);
+  assert.ok(after.oa - before.oa > 105000 && after.oa - before.oa < 110000, `OA rose by ${after.oa - before.oa}`);
+  assert.equal(after.ra, 0);
+  // From 55: an empty RA is filled first, up to the member's own FRS (turned 55 in 2021: 186,000).
+  const old = runProjectionEngine({ ...base, currentAge: 60, oaBalance: 0, housingCpfUsedToDate: 300000, sellPropertyAge: 61 });
+  const o = old.find((r) => r.age === 61);
+  assert.ok(o.ra >= 186000 && o.ra < 200000, `RA after sale: ${o.ra}`);
+  assert.ok(o.oa > 110000, `balance stays in OA: ${o.oa}`);
+  // Nothing sold, nothing refunded.
+  assert.equal(runProjectionEngine({ ...base, currentAge: 40, oaBalance: 0 }).find((r) => r.age === 42).oa, 0);
+});
+
+// Source: CPF Board — Retirement Sum Topping-Up Scheme: top-ups are accepted up to the current
+// Full Retirement Sum below 55 and up to the current Enhanced Retirement Sum from 55.
+test('a cash top-up above the limit is not accepted and does not spill into the Ordinary Account', () => {
+  const base = { ...DEFAULT_INPUTS, currentYear: 2026, currentMonth: 6, birthMonth: 6, dpsMode: 'optout', maBalance: 0, medicalUsage: 0,
+    salaryGross: 5000, salaryBonus: 0, empOaCont: 13800, empSaCont: 3600, empMaCont: 4800, housingOutflow: 0, annualGovGrant: 0 };
+  // Below 55 with the SA already above the FRS (220,400 in 2026): the whole top-up is turned away.
+  const full = { ...base, currentAge: 40, oaBalance: 10000, saBalance: 230000 };
+  const a = runProjectionEngine({ ...full, vcSaTopup: 8000 })[0], b = runProjectionEngine(full)[0];
+  assert.equal(a.oa, b.oa); assert.equal(a.sa, b.sa);
+  assert.equal(a.topUpNotAccepted, 8000);
+  // With room, it is accepted in full.
+  const room = { ...base, currentAge: 40, oaBalance: 10000, saBalance: 50000 };
+  const c = runProjectionEngine({ ...room, vcSaTopup: 8000 })[0], d = runProjectionEngine(room)[0];
+  assert.ok(c.sa - d.sa >= 8000 && c.sa - d.sa < 8400, `SA rose by ${c.sa - d.sa}`);
+  assert.equal(c.oa, d.oa); assert.equal(c.topUpNotAccepted, undefined);
+  // From 55 the limit is the Enhanced Retirement Sum (440,800 in 2026), not the Full Retirement Sum.
+  const senior = { ...base, currentAge: 58, oaBalance: 0, saBalance: 300000 };
+  const e = runProjectionEngine({ ...senior, vcSaTopup: 8000 })[0], f = runProjectionEngine(senior)[0];
+  assert.ok(e.ra - f.ra >= 8000, `RA rose by ${e.ra - f.ra}`);
+  assert.equal(e.oa, f.oa);
+});

@@ -12,7 +12,7 @@
  */
 import { runProjectionEngine, interpolateCpfLife, raAtPayoutStart } from '../engine/index.js';
 import { DEFAULT_INPUTS } from '../inputs/defaults.js';
-import { cohortFRS, projectedSum, scAllocBand, scEmployeeRate, CPF_RATES } from '../policy/cpf2026.js';
+import { cohortFRS, projectedSum, scAllocBand, scEmployeeRate, CPF_RATES, SHB } from '../policy/cpf2026.js';
 import { computeIrasTax } from '../policy/tax.js';
 
 export const OW_CEILING_MONTHLY = 8000;   // CPF Ordinary Wage ceiling from 1 Jan 2026
@@ -42,6 +42,20 @@ export const DEFAULT_ANSWERS = {
   inflation: 2,            // % a year
   realPayGrowth: 0,        // % a year above inflation
   sumGrowth: 3,            // % a year growth in retirement sums after 2027
+  // ── Workspace modules ──
+  // Household: a partner with their own CPF (see src/model/household.js)
+  hasPartner: false, pBirthYear: 1991, pBirthMonth: 6, pIsMale: false, pStatus: 'SC',
+  pWork: 'employee', pSalary: 0, pBonusMonths: 0, pTradeIncome: 0, pOa: 0, pSa: 0, pMa: 0,
+  pPayoutAge: 65, pStopWorkAge: 65, pTopUpYearly: 0,
+  // Property
+  ownsHome: false, homeValue: 0, homeGrowth: 2,   // value today; % a year
+  cpfUsedForHome: 0,       // CPF used so far with accrued interest (from the CPF statement)
+  sellHomeAge: 0,          // 0 = keep the home
+  loanOwedAtSale: 0,       // home loan still owed when sold
+  nextHomeCost: 0,         // cost of the next home in today's dollars (0 = none)
+  shb: false, shbNextFlat: '3r', shbCommit: 60000, // Silver Housing Bonus
+  // Top-ups and tax
+  srsYearly: 0, srsReturn: 3,
 };
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -89,7 +103,22 @@ export const toEngineInputs = (answers, now = new Date()) => {
     targetMonthlyIncome: num(a.targetIncome), payoutAge: clamp(num(a.payoutAge, 65), 65, 70),
     contributionStopAge: clamp(num(a.stopWorkAge, 65), age, 95),
     vcSaTopup: num(a.topUpYearly), oaToSaTransfer: age < 55 ? num(a.oaToSaYearly) : 0,
-    propertyValue: 0, includeProperty: false,
+    ...propertyInputs(a, age, pr),
+  };
+};
+
+/** Property answers → engine inputs. A sale refunds CPF used; the Silver Housing Bonus is optional. */
+const propertyInputs = (a, age, pr) => {
+  if (!a.ownsHome || num(a.homeValue) <= 0) return { propertyValue: 0, includeProperty: false };
+  const sellAge = num(a.sellHomeAge) > age ? clamp(num(a.sellHomeAge), age + 1, 95) : 0;
+  const shb = !!a.shb && sellAge >= SHB.minAge && !pr;
+  return {
+    propertyValue: num(a.homeValue), propertyGrowthRate: clamp(num(a.homeGrowth, 2), -2, 8), includeProperty: true,
+    propertyLeasehold: false, housingCpfUsedToDate: num(a.cpfUsedForHome), sellPropertyAge: sellAge,
+    loanOwedAtSale: num(a.loanOwedAtSale),
+    propMonetiseEnabled: shb, propMonetiseScheme: shb ? 'shb' : 'downgrade', propMonetiseAge: sellAge || 65,
+    propMonetiseCashProceeds: 0, propMonetiseRaTopup: shb ? clamp(num(a.shbCommit), 0, SHB.maxCommit) : 0,
+    shsToFlat: a.shbNextFlat === '2r' ? '2r' : '3r',
   };
 };
 
@@ -108,10 +137,10 @@ const LABELS = [[85, 'On track'], [65, 'Nearly there'], [40, 'Needs attention'],
  * Runs the engine and derives everything the Guided screens need.
  * @returns plan object (see fields below). Money fields ending in `Today` are in today's dollars.
  */
-export const buildPlan = (answers, now = new Date()) => {
+export const buildPlan = (answers, now = new Date(), engineOptions = null) => {
   const a = { ...DEFAULT_ANSWERS, ...answers };
   const inputs = toEngineInputs(a, now);
-  const rows = runProjectionEngine(inputs);
+  const rows = engineOptions ? runProjectionEngine(inputs, engineOptions) : runProjectionEngine(inputs);
   const byAge = new Map(rows.map((r) => [r.age, r]));
   const { age, monthsToNext, year } = ageFrom(a.birthYear, a.birthMonth, now);
   const pa = inputs.payoutAge, infl = num(inputs.inflationRate, 2) / 100, g = num(inputs.retirementSumGrowth, 3) / 100;
@@ -132,9 +161,46 @@ export const buildPlan = (answers, now = new Date()) => {
   const oaAtPayoutToday = Math.round(toToday(byAge.get(Math.max(pa, age) - 1)?.oa ?? num(a.oa), Math.max(pa, age)));
   const months = Math.max(12, (OA_SPREAD_TO_AGE - Math.max(pa, age)) * 12);
   const realMonthly = Math.pow((1 + CPF_RATES.OA) / (1 + infl), 1 / 12) - 1;
-  const oaMonthlyToday = Math.round(Math.abs(realMonthly) < 1e-9 ? oaAtPayoutToday / months
+  const oaMonthlyRaw = Math.round(Math.abs(realMonthly) < 1e-9 ? oaAtPayoutToday / months
     : (oaAtPayoutToday * realMonthly) / (1 - Math.pow(1 + realMonthly, -months)));
-  const incomeToday = payoutToday + oaMonthlyToday;
+
+  // ── Selling the home (Workspace): CPF refund, cash released, Silver Housing Bonus ──
+  let sale = null;
+  if (inputs.sellPropertyAge > 0) {
+    const sellAge = inputs.sellPropertyAge, n = sellAge - age, hg = num(inputs.propertyGrowthRate) / 100;
+    const row = byAge.get(sellAge) || {};
+    const price = Math.round(num(a.homeValue) * Math.pow(1 + hg, n));
+    const nextCost = Math.round(num(a.nextHomeCost) * Math.pow(1 + hg, n)); // next home rises with property prices
+    const committed = num(row.shbCommitted), bonus = num(row.shbBonus);
+    // Left after repaying the loan and buying the next home. Part of it sits in CPF (the refund).
+    const resources = price - num(a.loanOwedAtSale) - nextCost - committed + bonus;
+    let refund = null, cash = null, inCpf = null, poolToday = 0;
+    const afterPayout = sellAge >= Math.max(pa, age);
+    if (!engineOptions) { // skipped inside Monte Carlo runs, where only CPF balances are needed
+      const kept = runProjectionEngine({ ...inputs, sellPropertyAge: 0, propMonetiseEnabled: false });
+      const k = kept.find((r) => r.age === sellAge) || {};
+      refund = Math.max(0, Math.round((row.oa + row.sa + row.ra) - (k.oa + k.sa + k.ra) - committed));
+      inCpf = Math.max(0, Math.min(refund, resources)); // the next home is paid from cash first, then from the CPF refund
+      cash = Math.max(0, resources - refund);
+      // What the sale adds outside the engine's CPF balances at payout age:
+      //  - sold before payouts start: the refund is already in the engine's OA/RA, so only the cash
+      //    counts here (negative when the next home eats into the CPF refund);
+      //  - sold after payouts start: the refund arrives too late for the payout-age balances, so all
+      //    of what is left counts here.
+      poolToday = (afterPayout ? resources : resources - refund) / Math.pow(1 + infl, n);
+    }
+    sale = { age: sellAge, year: a.birthYear + sellAge, price, priceToday: Math.round(price / Math.pow(1 + infl, n)), nextCost, loanOwed: num(a.loanOwedAtSale),
+      refund, committed, bonus, shb: !!inputs.propMonetiseEnabled, resources, inCpf, cash, afterPayout,
+      cashToday: cash === null ? null : Math.round(cash / Math.pow(1 + infl, n)), shortfall: resources < 0, poolToday: Math.round(poolToday) };
+  }
+  // The sale's contribution, spread evenly from the later of the sale and the payout age to 90,
+  // assuming it only keeps pace with prices. Shown as its own part of income. A negative amount
+  // (next home partly paid from the CPF refund) is taken off the Ordinary Account part instead.
+  const saleFrom = sale ? Math.max(sale.age, pa, age) : 0;
+  const saleMonthly = sale ? sale.poolToday / Math.max(12, (OA_SPREAD_TO_AGE - saleFrom) * 12) : 0;
+  const oaMonthlyToday = Math.max(0, Math.round(oaMonthlyRaw + Math.min(0, saleMonthly)));
+  const otherMonthlyToday = Math.max(0, Math.round(saleMonthly));
+  const incomeToday = payoutToday + oaMonthlyToday + otherMonthlyToday;
   const target = num(a.targetIncome);
   const coverage = target > 0 ? incomeToday / target : null;
   const gapToday = target > 0 ? Math.max(0, target - incomeToday) : 0;
@@ -172,6 +238,7 @@ export const buildPlan = (answers, now = new Date()) => {
     if (short) watch.push({ key: 'oa-housing', age: short.age, text: `Your Ordinary Account runs out at ${short.age}, before your home loan ends at ${inputs.housingStopAge}. You would need to pay the rest in cash.` });
   }
   if (age < 55 && frsCoverage < 0.5) watch.push({ key: 'below-brs', age: 55, text: 'At 55 you are projected to have less than the Basic Retirement Sum. CPF LIFE payouts will be lower than most people expect.' });
+  if (sale?.shortfall) watch.unshift({ key: 'sale-short', age: sale.age, text: `Selling at ${sale.age} would not cover the loan and the next home. You would be short by about S$${Math.abs(Math.round(sale.resources)).toLocaleString('en-SG')}.` });
   const maOut = rows.find((r) => r.age > Math.max(65, age) && r.age < 80 && r.ma <= 0); // later than 80 depends too much on cost assumptions to warn about
   if (maOut) watch.push({ key: 'ma-out', age: maOut.age, text: `MediSave is projected to run out at ${maOut.age} on current premium and medical-cost assumptions.` });
 
@@ -184,7 +251,7 @@ export const buildPlan = (answers, now = new Date()) => {
 
   return {
     answers: a, inputs, rows, age, year, payoutAge: pa, year55, yearPayout: a.birthYear + pa,
-    raAtPayout, payouts, payout, payoutToday, oaAtPayoutToday, oaMonthlyToday, incomeToday, target, coverage, gapToday,
+    raAtPayout, payouts, payout, payoutToday, oaAtPayoutToday, oaMonthlyToday, otherMonthlyToday, sale, incomeToday, target, coverage, gapToday,
     frs55, raAt55, frsCoverage, maCoverage, bhs65,
     totalNow: num(a.oa) + num(a.sa) + num(a.ma),
     score, label, parts, watch, series,
@@ -193,15 +260,21 @@ export const buildPlan = (answers, now = new Date()) => {
 };
 
 /** Rough yearly income tax saved by a cash top-up of `amount` (employee CPF relief and earned-income relief only). */
-export const taxSavedByTopUp = (plan, amount) => {
+/** Rough chargeable income: pay less employee CPF and earned-income relief. Other reliefs are not known. */
+export const chargeableIncome = (plan) => {
   const i = plan.inputs;
   const income = i.isSelfEmployed ? num(i.netTradeIncome) : num(i.salaryGross) * 12 + num(i.salaryBonus);
-  const wages = Math.min(num(i.salaryGross), OW_CEILING_MONTHLY) * 12 + Math.min(num(i.salaryBonus), Math.max(0, ANNUAL_WAGE_CEILING - Math.min(num(i.salaryGross), OW_CEILING_MONTHLY) * 12));
-  const employeeRate = scEmployeeRate(plan.age, plan.year);
-  const chargeable = Math.max(0, income - (i.isSelfEmployed ? 0 : wages * employeeRate) - 1000);
-  const relief = Math.min(amount, RSTU_RELIEF_CAP);
-  return Math.max(0, computeIrasTax(chargeable) - computeIrasTax(Math.max(0, chargeable - relief)));
+  const ow = Math.min(num(i.salaryGross), OW_CEILING_MONTHLY) * 12;
+  const wages = ow + Math.min(num(i.salaryBonus), Math.max(0, ANNUAL_WAGE_CEILING - ow));
+  return Math.max(0, income - (i.isSelfEmployed ? 0 : wages * scEmployeeRate(plan.age, plan.year)) - 1000);
 };
+/** Yearly income tax saved by `relief` dollars of extra tax relief. */
+export const taxSavedByRelief = (plan, relief) => {
+  const c = chargeableIncome(plan);
+  return Math.round(Math.max(0, computeIrasTax(c) - computeIrasTax(Math.max(0, c - Math.max(0, relief)))));
+};
+/** Rough yearly income tax saved by a cash top-up of `amount` to your own account (relief capped at S$8,000). */
+export const taxSavedByTopUp = (plan, amount) => taxSavedByRelief(plan, Math.min(amount, RSTU_RELIEF_CAP));
 
 /**
  * Candidate moves, each measured by re-running the engine with one change.
@@ -272,7 +345,7 @@ export const findMoves = (answers, now = new Date(), limit = 3) => {
 
 /** The few figures used to compare one plan with another. */
 export const summarise = (plan) => ({
-  incomeToday: plan.incomeToday, payoutToday: plan.payoutToday, oaMonthlyToday: plan.oaMonthlyToday,
+  incomeToday: plan.incomeToday, payoutToday: plan.payoutToday, oaMonthlyToday: plan.oaMonthlyToday, otherMonthlyToday: plan.otherMonthlyToday,
   gapToday: plan.gapToday, coverage: plan.coverage, frsCoverage: plan.frsCoverage, score: plan.score, label: plan.label,
   payoutAge: plan.payoutAge, payout: plan.payout,
 });

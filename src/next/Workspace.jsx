@@ -46,8 +46,11 @@ export function CompareView({ tier, base, plan, answers, tried, changed, scenari
   ], [base, scenarios, answers, now]);
   if (!has(tier, 'plus')) {
     return <Locked need="plus" title="Compare your options side by side" points={[
+      'Plan as a household, with your partner’s CPF alongside yours',
+      'See what selling or right-sizing your home would do, including the Silver Housing Bonus',
+      'Compare CPF top-ups with SRS and the tax each saves',
+      'Run 500 simulations to see the range of outcomes',
       'Save up to four what-if scenarios and see them in one table',
-      'Stress-test your plan against higher prices, flat pay and stopping work early',
       'Year-by-year balances you can download, and a report you can print',
     ]} />;
   }
@@ -60,6 +63,7 @@ export function CompareView({ tier, base, plan, answers, tried, changed, scenari
     ['Monthly income', (s) => money(s.incomeToday), (s) => s.incomeToday],
     ['CPF LIFE, for life', (s) => money(s.payoutToday), (s) => s.payoutToday],
     ['Ordinary Account, to 90', (s) => money(s.oaMonthlyToday), (s) => s.oaMonthlyToday],
+    ...(cols.some((c) => c.s.otherMonthlyToday > 0) ? [['Cash from home sale, to 90', (s) => money(s.otherMonthlyToday), (s) => s.otherMonthlyToday]] : []),
     ['Gap to your target', (s) => (s.gapToday > 0 ? money(s.gapToday) : 'None'), null],
     ['Payouts start at', (s) => `${s.payoutAge}`, null],
     ['Full Retirement Sum at 55', (s) => pct(s.frsCoverage), null],
@@ -204,7 +208,7 @@ export function PreviewSwitch({ tier, ownTier, onPreview }) {
     <section className="panel">
       <h2>Preview another plan</h2>
       <p className="muted">See the planner as a {options.slice(0, -1).map(tierName).join(' or ')} user would. Your saved plan{ownTier === 'pro' ? ' and client files are' : ' is'} not changed, and the preview ends when you reload the page.</p>
-      <div className="seg" role="group" aria-label="Plan to preview">
+      <div className="opts" role="group" aria-label="Plan to preview">
         {options.map((t) => (
           <button key={t} type="button" className={tier === t ? 'on' : ''} aria-pressed={tier === t} onClick={() => onPreview(t)}>{tierName(t)}{t === ownTier ? ' (yours)' : ''}</button>
         ))}

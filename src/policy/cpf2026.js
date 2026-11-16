@@ -3,13 +3,25 @@
  * Extracted from App.jsx (App_170) — logic unchanged.
  */
 
-// ── Silver Housing Bonus lookup table ─────────────────────────────────────────
-// Source: HDB SHB eligibility matrix. Validate against HDB website each January.
-// Key: '{fromRooms}r_to_{toRooms}r'
-export const SHS_BONUS_RA = {
-  '5r_to_4r': 15000, '5r_to_3r': 20000, '5r_to_2r': 25000,
-  '4r_to_3r': 15000, '4r_to_2r': 20000,
-  '3r_to_2r': 15000,
+// ── Silver Housing Bonus (HDB) ────────────────────────────────────────────────
+// Source: HDB, "Silver Housing Bonus" (rules from 1 Dec 2025). Re-check each January.
+//  - A CASH bonus, paid to the household. It is not a credit to the Retirement Account.
+//  - Earned by committing a net increase of up to $60,000 in the household's RA after right-sizing
+//    (cash from proceeds or CPF housing refunds), and joining CPF LIFE.
+//  - $1 of bonus for every $2 committed, up to $30,000. Sellers of private property with annual
+//    value above $21,000 (up to $31,000): $1 for every $6, up to $10,000.
+//  - Plus a flat $10,000 when the next home is a 2-room or smaller flat (incl. Community Care Apartment).
+//  - Seller aged 55+, Singapore Citizen, household income up to $14,000 a month; next home 3-room or smaller.
+export const SHB = {
+  maxCommit: 60000, minAge: 55, incomeCeiling: 14000,
+  standard: { perDollar: 2, max: 30000 }, higherAv: { perDollar: 6, max: 10000 },
+  smallFlatExtra: 10000,
+};
+/** Cash bonus for `committed` dollars of net RA increase. nextFlat: '3r' | '2r' (2-room or smaller). */
+export const silverHousingBonus = ({ committed = 0, nextFlat = '3r', higherAv = false } = {}) => {
+  const tier = higherAv ? SHB.higherAv : SHB.standard;
+  const base = Math.min(tier.max, Math.floor(Math.min(Math.max(0, Number(committed) || 0), SHB.maxCommit) / tier.perDollar));
+  return base + (nextFlat === '2r' ? SHB.smallFlatExtra : 0);
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════

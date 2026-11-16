@@ -12,6 +12,7 @@ import { tierName, PLAN_RANK } from '../entitlements/tiers.js';
 import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink, loadBook, saveBook, newId, signOut } from './storage.js';
 import { VERSION_LABEL } from '../version.js';
 import SavingsChart from './Chart.jsx';
+import { IncomeBar, OverviewView, HouseholdView, PropertyView, TopUpsView, ConfidenceView } from './Modules.jsx';
 import { money, pct, Help, MoneyField, Choice, Slider } from './ui.jsx';
 import { CompareView, WorkspaceDetails, Assumptions, ClientsView, ReportView, UpgradeCode, PreviewSwitch } from './Workspace.jsx';
 
@@ -130,26 +131,6 @@ function Setup({ answers, onDone, title }) {
 }
 
 /* ── Plan ─────────────────────────────────────────────────────────────────── */
-function IncomeBar({ plan }) {
-  const scale = Math.max(plan.target, plan.incomeToday, 1);
-  const w = (v) => `${Math.max(0, (v / scale) * 100)}%`;
-  return (
-    <div className="income">
-      <div className="bar" role="img" aria-label={`CPF LIFE ${money(plan.payoutToday)} a month, Ordinary Account ${money(plan.oaMonthlyToday)} a month${plan.gapToday > 0 ? `, gap ${money(plan.gapToday)} a month` : ''}`}>
-        <span className="seg-life" style={{ width: w(plan.payoutToday) }} />
-        {plan.oaMonthlyToday > 0 && <span className="seg-oa" style={{ width: w(plan.oaMonthlyToday) }} />}
-        {plan.gapToday > 0 && <span className="seg-gap" style={{ width: w(plan.gapToday) }} />}
-        {plan.target > 0 && <i className="target" style={{ left: w(plan.target) }} />}
-      </div>
-      <ul className="bar-key">
-        <li><i className="sw life" /><span><b>{money(plan.payoutToday)}</b> CPF LIFE <em>for life</em></span></li>
-        {plan.oaMonthlyToday > 0 && <li><i className="sw oa" /><span><b>{money(plan.oaMonthlyToday)}</b> Ordinary Account <em>if spread to age 90</em></span></li>}
-        {plan.gapToday > 0 && <li><i className="sw gap" /><span><b>{money(plan.gapToday)}</b> gap <em>from other savings</em></span></li>}
-      </ul>
-    </div>
-  );
-}
-
 function PlanView({ plan, moves, changed, onReset, go }) {
   const started = plan.age >= plan.payoutAge;
   const enough = plan.target > 0 && plan.gapToday === 0;
@@ -166,9 +147,9 @@ function PlanView({ plan, moves, changed, onReset, go }) {
       <div className="grid2">
         <section className="panel">
           <h2>{plan.target > 0 ? `Against the ${money(plan.target)} a month you want` : 'Your monthly income from CPF'}</h2>
-          <IncomeBar plan={plan} />
+          <IncomeBar p={plan} />
           {plan.target > 0 && <p className={`verdict ${enough ? 'ok' : 'short'}`}>
-            {enough ? `CPF covers your target${plan.payoutToday >= plan.target ? ' with CPF LIFE alone' : ', counting your Ordinary Account savings'}.`
+            {enough ? `CPF covers your target${plan.payoutToday >= plan.target ? ' with CPF LIFE alone' : plan.otherMonthlyToday > 0 ? ', counting your Ordinary Account savings and cash from your home sale' : ', counting your Ordinary Account savings'}.`
               : `CPF covers ${Math.floor(plan.coverage * 100)}% of your target. You are short by ${money(plan.gapToday)} a month.`}
           </p>}
         </section>
@@ -352,6 +333,16 @@ const ICONS = {
   plan: 'M3 12l9-8 9 8M5 10v10h14V10', moves: 'M4 18l6-6 4 4 6-8M14 8h6v6', details: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
   compare: 'M4 5h6v14H4zM14 5h6v14h-6z', profile: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0',
 };
+// Workspace and Adviser: a household dashboard with planning modules.
+const WORK_NAV = [['overview', 'Overview'], ['household', 'Household'], ['property', 'Property'], ['topups', 'Top-ups and tax'], ['confidence', 'Confidence'],
+  ['moves', 'Moves'], ['compare', 'Compare'], ['details', 'Details'], ['profile', 'Profile']];
+const WORK_BAR = [['overview', 'Overview'], ['moves', 'Moves'], ['compare', 'Compare'], ['more', 'More']];
+const WORK_ONLY = ['overview', 'household', 'property', 'topups', 'confidence', 'more'];
+Object.assign(ICONS, {
+  overview: ICONS.plan, household: 'M9 11a3 3 0 100-6 3 3 0 000 6zM17 11a3 3 0 100-6M3 20a6 6 0 0112 0M15 14a6 6 0 016 6',
+  property: 'M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10', topups: 'M12 3v18M7 8h7a3 3 0 010 6H9a3 3 0 000 6h8',
+  confidence: 'M3 20h18M6 20v-5M10 20v-9M14 20V7M18 20v-7', more: 'M5 12h.01M12 12h.01M19 12h.01',
+});
 const EMPTY = { answers: DEFAULT_ANSWERS, tried: {}, done: false, scenarios: [] };
 
 export default function GuidedApp() {
@@ -379,9 +370,12 @@ export default function GuidedApp() {
   useEffect(() => { window.scrollTo(0, 0); }, [tab]);
 
   const now = useMemo(() => new Date(), []);
-  const { base, moves } = useMemo(() => (done ? findMoves(answers, now) : { base: null, moves: [] }), [answers, done, now]);
+  // Guided plans are for one person and CPF only: partner and property answers are set aside there.
+  const work = tier !== 'lite';
+  const calc = useMemo(() => (work ? answers : { ...answers, hasPartner: false, ownsHome: false, pTopUpYearly: 0 }), [answers, work]);
+  const { base, moves } = useMemo(() => (done ? findMoves(calc, now) : { base: null, moves: [] }), [calc, done, now]);
   const changed = WHAT_IF_KEYS.filter((k) => tried[k] !== undefined && tried[k] !== answers[k]).length;
-  const plan = useMemo(() => (done ? (changed ? buildPlan({ ...answers, ...tried }, now) : base) : null), [answers, tried, done, base, changed, now]);
+  const plan = useMemo(() => (done ? (changed ? buildPlan({ ...calc, ...tried }, now) : base) : null), [calc, tried, done, base, changed, now]);
 
   if (!ownTier) return <Gate onPass={setTier} />;
 
@@ -405,19 +399,21 @@ export default function GuidedApp() {
   };
   const pro = tier === 'pro';
   const showTabs = done && tab !== 'clients' && tab !== 'report';
+  // The screen to show for this plan: Guided has Plan; Workspace and Adviser have Overview and modules.
+  const view = !work && WORK_ONLY.includes(tab) ? 'plan' : work && tab === 'plan' ? 'overview' : tab;
+  const barTabs = work ? WORK_BAR : TABS;
+  const navButton = ([id, label]) => (
+    <button key={id} type="button" className={view === id || (id === 'more' && !WORK_BAR.some(([b]) => b === view)) ? 'on' : ''} aria-current={view === id ? 'page' : undefined} onClick={() => setTab(id)}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[id]} /></svg>{label}
+    </button>
+  );
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="wrap">
           <a className="brand" href="/" aria-label="Fusion 富生 home"><span className="brand-mark" aria-hidden="true">富</span><span className="brand-name">Fusion</span></a>
-          {done && tab !== 'report' && <nav className="tabs" aria-label="Planner">
-            {TABS.map(([id, label]) => (
-              <button key={id} type="button" className={tab === id ? 'on' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[id]} /></svg>{label}
-              </button>
-            ))}
-          </nav>}
+{done && tab !== 'report' && <nav className={`tabs ${work ? 'work' : ''}`} aria-label="Planner">{barTabs.map(navButton)}</nav>}
           <div className="header-actions">
             {pro
               ? <button type="button" className={`client-btn ${tab === 'clients' ? 'on' : ''}`} onClick={() => setTab('clients')}><span className="visually-hidden">Client file: </span>{client ? client.name : 'My plan'} ▾</button>
@@ -442,16 +438,29 @@ export default function GuidedApp() {
       ) : !done ? (
         <Setup key={clientId || 'me'} answers={answers} title={client ? `Setting up ${client.name}'s plan` : null} onDone={(a) => setState((s) => ({ ...s, answers: a, tried: {}, done: true }))} />
       ) : (
-        <main className={`wrap main ${showTabs ? '' : 'no-tabs'}`} id="main">
+        <div className={`wrap ${work && showTabs ? 'layout' : ''}`}>
+          {work && showTabs && <nav className="side-nav" aria-label="Planner sections">{WORK_NAV.map(navButton)}</nav>}
+          <main className={`main ${showTabs ? '' : 'no-tabs'}`} id="main">
           {tier !== ownTier && <p className="preview-note no-print" role="status"><span>Previewing the <b>{tierName(tier)}</b> plan{client ? ` with ${client.name}'s file open` : ''}.</span> <button type="button" className="link" onClick={() => setPreview(null)}>Back to {tierName(ownTier)}</button></p>}
-          {tab === 'plan' && <PlanView plan={plan} moves={moves} changed={changed} onReset={() => setTried({})} go={setTab} />}
-          {tab === 'moves' && <MovesView base={base} plan={plan} moves={moves} tried={tried} setTried={setTried} answers={answers} />}
-          {tab === 'details' && <DetailsView plan={plan} tier={tier} onReport={() => setTab('report')} setAnswer={(p) => setState((s) => ({ ...s, answers: { ...s.answers, ...p } }))} />}
-          {tab === 'compare' && <CompareView tier={tier} base={base} plan={plan} answers={answers} tried={tried} changed={changed} scenarios={scenarios || []} setScenarios={setScenarios} setTried={setTried} now={now} go={setTab} />}
-          {tab === 'profile' && <ProfileView answers={answers} setAnswer={setAnswer} onRestart={restart} tier={tier} ownTier={ownTier} onTier={upgrade} onPreview={(t) => { setPreview(t === ownTier ? null : t); if (tab === 'clients' || tab === 'report') setTab('plan'); }} />}
-          {tab === 'report' && <ReportView plan={plan} base={base} answers={answers} scenarios={scenarios || []} now={now} tier={tier} client={client} adviser={book.adviser}
+          {view === 'plan' && <PlanView plan={plan} moves={moves} changed={changed} onReset={() => setTried({})} go={setTab} />}
+          {view === 'moves' && <MovesView base={base} plan={plan} moves={moves} tried={tried} setTried={setTried} answers={calc} />}
+          {view === 'details' && <DetailsView plan={plan} tier={tier} onReport={() => setTab('report')} setAnswer={(p) => setState((s) => ({ ...s, answers: { ...s.answers, ...p } }))} />}
+          {view === 'compare' && <CompareView tier={tier} base={base} plan={plan} answers={calc} tried={tried} changed={changed} scenarios={scenarios || []} setScenarios={setScenarios} setTried={setTried} now={now} go={setTab} />}
+          {view === 'profile' && <ProfileView answers={answers} setAnswer={setAnswer} onRestart={restart} tier={tier} ownTier={ownTier} onTier={upgrade} onPreview={(t) => { setPreview(t === ownTier ? null : t); if (tab === 'clients' || tab === 'report') setTab('plan'); }} />}
+          {view === 'report' && <ReportView plan={plan} base={base} answers={calc} scenarios={scenarios || []} now={now} tier={tier} client={client} adviser={book.adviser}
             setNotes={(notes) => setBook((b) => ({ ...b, clients: b.clients.map((c) => (c.id === clientId ? { ...c, notes } : c)) }))} onBack={() => setTab('details')} />}
-        </main>
+          {view === 'overview' && <OverviewView answers={calc} plan={plan} moves={moves} changed={changed} onReset={() => setTried({})} scenarios={scenarios || []} go={setTab} now={now} />}
+          {view === 'household' && <HouseholdView answers={answers} setAnswer={setAnswer} now={now} />}
+          {view === 'property' && <PropertyView answers={answers} setAnswer={setAnswer} plan={plan} now={now} />}
+          {view === 'topups' && <TopUpsView answers={calc} plan={plan} tried={tried} setTried={setTried} setAnswer={setAnswer} now={now} />}
+          {view === 'confidence' && <ConfidenceView answers={calc} plan={plan} now={now} />}
+          {view === 'more' && <>
+            <section className="lead compact"><p className="eyebrow">All sections</p><h1>Where to next?</h1></section>
+            <ul className="more-list">{WORK_NAV.map(([id, label]) => <li key={id}><button type="button" className="panel" onClick={() => setTab(id)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[id]} /></svg>{label}</button></li>)}</ul>
+          </>}
+          </main>
+        </div>
       )}
       <footer className="app-foot no-print">
         <span>Fusion 富生 {VERSION_LABEL}</span>

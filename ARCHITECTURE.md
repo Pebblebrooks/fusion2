@@ -106,10 +106,12 @@ sent by the browser.
 | `src/model/plan.js` | Pure functions. Answers → engine inputs → every figure on screen (`buildPlan`, `findMoves`). Tested in `tests/plan.model.test.js`. |
 | `src/next/GuidedApp.jsx` | Access code, 5-step setup, the shell and the views: Plan, Moves, Details, Compare, Profile. |
 | `src/next/Workspace.jsx` | Workspace: Compare (saved scenarios), stress test, year-by-year table + CSV, assumptions, report. Adviser: client files (`fusion_clients_v1`), backup/restore, firm name and notes on reports. Guided users see one short upgrade panel instead. |
+| `src/next/Modules.jsx` | Workspace modules: Overview, Household, Property, Top-ups and tax, Confidence. Also the shared income bar. |
+| `src/model/household.js` | Pure models for the modules: `buildHousehold`, `compareTopUps`, `runConfidence` (seeded Monte Carlo). Property sale lives in `buildPlan` (`plan.sale`). |
 | `src/next/ui.jsx` | Shared form controls and money/percent formatting. |
 | `src/next/Chart.jsx` | Savings chart (hand-drawn SVG, hover values, table view). |
 | `src/next/storage.js` | Saved plan (`fusion_guided_plan_v1`), access tier, theme, link into the classic planner. |
-| `src/next/guided.css` | Planner styles. Imports `site/site.css` for tokens, buttons and type. Class names must not reuse site ones (`card`, `hero`, `steps`, `plans`, `field`). |
+| `src/next/guided.css` | Planner styles. Imports `site/site.css` for tokens, buttons and type. Class names must not reuse site ones (`card`, `hero`, `steps`, `plans`, `field`, `seg`, `choice`). |
 | `src/entitlements/gate.js` | Beta access codes shared by both planners. Client-visible; replace with server sign-in before launch. |
 
 Rules for this planner: one headline answer per screen; money in today's dollars unless labelled;

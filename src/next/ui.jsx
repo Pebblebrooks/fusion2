@@ -24,9 +24,9 @@ export function MoneyField({ label, hint, value, onChange, suffix, id }) {
 
 export function Choice({ label, value, onChange, options, name }) {
   return (
-    <fieldset className="fld choice">
+    <fieldset className="fld pick">
       <legend className="field-label">{label}</legend>
-      <div className="seg">
+      <div className="opts">
         {options.map(([v, text]) => (
           <label key={String(v)} className={value === v ? 'on' : ''}>
             <input type="radio" name={name} checked={value === v} onChange={() => onChange(v)} />{text}

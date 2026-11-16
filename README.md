@@ -6,7 +6,7 @@ Cloudflare Worker.
 - Website: `/` (home), `/pricing/`, `/advisers/`, `/learn/`, `/faq/`, `/contact/`, `/privacy/`, `/terms/`
 - Planner (new, Guided): `/app/` — setup, My Plan, Moves, Details, Profile. Saves the plan on the device.
   - Guided: Plan, Moves, Details, Profile.
-  - Workspace adds: Compare (up to 4 saved scenarios), stress test, year-by-year table with CSV download, own assumptions, printable report.
+  - Workspace opens on a household Overview and adds modules: Household (partner), Property (sale, right-sizing, Silver Housing Bonus), Top-ups and tax, Confidence (500 simulations), plus Compare (up to 4 saved scenarios), stress test, year-by-year table with CSV download, own assumptions and a printable report.
   - Adviser adds: client files kept on the device (with backup and restore), firm name and notes on client reports.
   - Preview: under Profile, Adviser users can view the planner as Guided or Workspace, and Workspace users as Guided. It lasts until the page is reloaded and changes no saved data.
   - Logo: the teal 富 mark on the website and new planner; the classic planner keeps its red seal, so the two are easy to tell apart.

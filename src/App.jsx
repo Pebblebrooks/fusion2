@@ -37,7 +37,7 @@ import {
 
 
 // ── Modules (restructure step 3) ──────────────────────────────────────────
-import { ANNUAL_LIMIT, CPF_RATES, RETIREMENT_SUMS_2026, projectedSum, SHS_BONUS_RA, SRS_CAP_FOREIGNER, SRS_CAP_SC_PR, getDpsPremiumForAge, getMslPremiumForAge, getPRRates } from './policy/cpf2026.js';
+import { ANNUAL_LIMIT, CPF_RATES, RETIREMENT_SUMS_2026, projectedSum, SHB, silverHousingBonus, SRS_CAP_FOREIGNER, SRS_CAP_SC_PR, getDpsPremiumForAge, getMslPremiumForAge, getPRRates } from './policy/cpf2026.js';
 import { IRAS_SLABS, computeIrasTax, getMarginalRate } from './policy/tax.js';
 import { computeBasicPlanParams, computeBasicPlanYearPayout, computeSensitivityRow, interpolateCpfLife, raAtPayoutStart } from './engine/cpfLife.js';
 import { BALA_CURVE, balaRatio, getLifeStage, seededRandom } from './engine/common.js';
@@ -5547,7 +5547,8 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       // D-NEW-4 fix: use RETIREMENT_SUMS_2026.ERS constant instead of hardcoded 440800 — validation stays correct when the constant is updated for future years.
       if (pmScheme === 'lbs' && !errs.propMonetiseRaTopup && pmRA > RETIREMENT_SUMS_2026.ERS) errs.propMonetiseRaTopup = `LBS RA top-up capped at ERS ($${RETIREMENT_SUMS_2026.ERS.toLocaleString()})`;
       // SHB-specific: bonus is capped at $30,000 total (cash + RA); warn if RA alone exceeds this
-      if (pmScheme === 'shb' && !errs.propMonetiseRaTopup && pmRA > 30000) errs.propMonetiseRaTopup = "SHB RA bonus typically capped at $30,000 (4-room → 3-room or smaller). Verify exact amount with HDB before entering.";
+      if (pmScheme === 'shb' && !errs.propMonetiseRaTopup && pmRA > SHB.maxCommit) errs.propMonetiseRaTopup = `Silver Housing Bonus counts up to $${SHB.maxCommit.toLocaleString()} committed to the RA per household`;
+      if (pmScheme === 'shb' && !errs.propMonetiseAge && pmAge < SHB.minAge) errs.propMonetiseAge = `Silver Housing Bonus requires age ${SHB.minAge}+`;
       // LBS monthly payout validation
       if (pmScheme === 'lbs') {
         const lbsMo = Number(inp.lbsMonthlyPayout) || 0;
@@ -19248,7 +19249,7 @@ ${milestoneSnapshotHtml}
                           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.5 }}>
                             {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Sell existing home, buy smaller. Enter net cash after CPF OA refund (handled by Sell Property at Age), agent fees, stamp duty, and replacement home cost. Any voluntary RA top-up from proceeds is optional."}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "Sell tail-end of HDB lease to HDB; you stay in your flat for life. Available from age 65 (SC only). HDB pays an annuity premium directly into RA (enter in RA field below); you may also receive a smaller cash component. ⚠ Monthly LBS income is not modelled as a cash stream — add it as private income in the Retirement section if needed."}
-                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Downgrade to a 3-room or smaller HDB; govt tops up RA as a CPF bonus. Cash bonus (if any) enters private assets; CPF RA bonus enters RA. Bonus amount depends on flat type — verify the exact figures with CPF Board before entering."}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Right-size to a 3-room or smaller HDB flat from age 55 and commit up to $60,000 to your Retirement Account. HDB pays a cash bonus of $1 for every $2 committed (up to $30,000), plus $10,000 if the next flat is 2-room or smaller. The bonus is cash, not a CPF credit. Household income ceiling $14,000 a month; confirm eligibility with HDB."}
                           </p>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -19261,10 +19262,10 @@ ${milestoneSnapshotHtml}
                             <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                               {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Net Cash Proceeds ($)"}
                               {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "LBS Cash Component ($)"}
-                              {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Cash Bonus ($)"}
+                              {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Net Cash Kept ($)"}
                               {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && <TooltipBox id="t-pm-cash" text="Net cash received into your bank account after all deductions: sale price minus CPF OA refund (the OA refund is handled by 'Sell Property at Age'), agent commissions, stamp duties, and the cost of your replacement home. This amount is credited to your private assets at the event age." />}
                               {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && <TooltipBox id="t-pm-cash" text="The cash component HDB pays you at LBS completion — typically a small amount after the annuity premium is deducted and routed to RA. Many LBS recipients receive $0 cash (all proceeds go to RA as annuity premium). Enter 0 if your LBS deal has no cash component. Credited to private assets." />}
-                              {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && <TooltipBox id="t-pm-cash" text="Any cash Silver Housing Bonus amount. Note: the SHB bonus is primarily credited to RA (enter in the RA field below), not paid as cash. This field is for any residual cash payout. Enter 0 if no cash component applies to your specific SHB type. Credited to private assets." />}
+                              {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && <TooltipBox id="t-pm-cash" text="Net cash you keep from right-sizing, after buying the smaller flat and after the amount committed to your Retirement Account. Do not include the Silver Housing Bonus here: it is worked out below and added automatically. Credited to private assets." />}
                             </div>
                             <input type="text" inputMode="decimal" name="propMonetiseCashProceeds" value={getDisplayValue("propMonetiseCashProceeds", inputs.propMonetiseCashProceeds)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("propMonetiseCashProceeds"); e.target.select(); }} className={fieldChanged("propMonetiseCashProceeds") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseCashProceeds ? "var(--clr-red)" : "rgba(var(--clr-blue-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                             {inputErrors.propMonetiseCashProceeds && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.propMonetiseCashProceeds}</p>}
@@ -19274,47 +19275,38 @@ ${milestoneSnapshotHtml}
                           <div style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--clr-blue)", textTransform: "uppercase", marginBottom: 4 }}>
                             {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "RA Top-up — Voluntary ($)"}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "Annuity Premium to RA ($)"}
-                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "CPF RA Bonus ($)"}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Committed to RA ($)"}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && <TooltipBox id="t-pm-ra" text="Optional: voluntarily top up RA from your net proceeds. This grows at 4%/yr and boosts monthly CPF LIFE payouts. Leave as 0 if you prefer to keep the cash in private assets. Cannot push RA above ERS ($440,800)." />}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && <TooltipBox id="t-pm-ra" text="The annuity premium HDB pays directly into your RA — this is the core LBS mechanism. The amount depends on your flat type, remaining lease, and RA balance. It cannot exceed ERS ($440,800). This directly increases your CPF LIFE monthly payout. Check the CPF Board LBS calculator for your exact figure." />}
-                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && <TooltipBox id="t-pm-ra" text="The CPF RA bonus credited under SHB. Amount varies by flat type: typically $30,000 for 3-room or smaller, or $15,000 for 2-room Flexi. A soft warning fires if you enter more than $90,000. Confirm the exact figure with CPF Board before using this tool for financial decisions." />}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && <TooltipBox id="t-pm-ra" text="The net increase in your household's Retirement Account after right-sizing, from sale proceeds or CPF housing refunds. Up to $60,000 counts towards the bonus, and the Retirement Account cannot go above the Full Retirement Sum this way. This amount raises your CPF LIFE payout." />}
                           </div>
                           <input type="text" inputMode="decimal" name="propMonetiseRaTopup" aria-label="Property monetisation RA top-up amount" value={getDisplayValue("propMonetiseRaTopup", inputs.propMonetiseRaTopup)} onChange={handleInputChange} onBlur={handleBlur} onKeyDown={handleKeyDown} onFocus={(e) => { setFocusedField("propMonetiseRaTopup"); e.target.select(); }} className={fieldChanged("propMonetiseRaTopup") ? "cpf-fc" : undefined} style={{ width: "100%", padding: "8px 12px", background: "var(--bg-muted)", border: `1px solid ${inputErrors.propMonetiseRaTopup ? "var(--clr-red)" : "rgba(var(--clr-blue-rgb),0.3)"}`, borderRadius: 8, color: "var(--text-bright)", fontSize: 14, outline: "none", fontFamily: "monospace", boxSizing: "border-box" }} />
                           {inputErrors.propMonetiseRaTopup && <p style={{ fontSize: 12, color: "var(--clr-red)", marginTop: 2 }}>⚠ {inputErrors.propMonetiseRaTopup}</p>}
-                          {/* SHB auto-fill from SHS_BONUS_RA lookup table */}
+                          {/* Silver Housing Bonus: cash bonus worked out from the amount committed and the next flat */}
                           {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && (() => {
-                            const fromFlat = inputs.shsFromFlat || "5r";
-                            const toFlat   = inputs.shsToFlat   || "3r";
-                            const key = `${fromFlat}_to_${toFlat}`;
-                            const bonus = SHS_BONUS_RA[key] || null;
+                            const toFlat = inputs.shsToFlat === "2r" ? "2r" : "3r";
+                            const bonus = silverHousingBonus({ committed: Number(inputs.propMonetiseRaTopup) || 0, nextFlat: toFlat });
                             return (
                               <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                                  {[["From flat", "shsFromFlat", ["5r","4r","3r"]], ["To flat", "shsToFlat", ["4r","3r","2r"]]].map(([label, field, opts]) => (
-                                    <div key={field}>
-                                      <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 3 }}>{label}</label>
-                                      <select value={inputs[field] || opts[0]}
-                                        onChange={e => setInputs(p => ({ ...p, [field]: e.target.value }))}
-                                        style={{ width: "100%", padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-strong)", background: "var(--bg-muted)", color: "var(--text-bright)", fontSize: 13 }}>
-                                        {opts.map(o => <option key={o} value={o}>{o.replace("r", "-room")}</option>)}
-                                      </select>
-                                    </div>
-                                  ))}
+                                <div>
+                                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 3 }}>Next flat</label>
+                                  <select value={toFlat} aria-label="Next flat type"
+                                    onChange={e => setInputs(p => ({ ...p, shsToFlat: e.target.value }))}
+                                    style={{ width: "100%", padding: "5px 8px", borderRadius: 7, border: "1px solid var(--border-strong)", background: "var(--bg-muted)", color: "var(--text-bright)", fontSize: 13 }}>
+                                    <option value="3r">3-room</option>
+                                    <option value="2r">2-room or smaller</option>
+                                  </select>
                                 </div>
-                                {bonus !== null && (
-                                  <button onClick={() => setInputs(p => ({ ...p, propMonetiseRaTopup: bonus }))}
-                                    style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: "var(--clr-emerald)", color: "#fff" }}>
-                                    ⚡ Auto-fill RA Bonus: ${bonus.toLocaleString()}
-                                  </button>
-                                )}
-                                {bonus === null && <p style={{ fontSize: 11, color: "var(--clr-amber)", margin: 0 }}>⚠ No SHB bonus for this flat combination — check CPF Board for eligibility.</p>}
+                                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--clr-emerald)", margin: 0 }}>
+                                  Silver Housing Bonus: ${bonus.toLocaleString()} in cash, added to private assets automatically
+                                </p>
                               </div>
                             );
                           })()}
                           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
                             {(inputs.propMonetiseScheme ?? "downgrade") === "downgrade" && "Credited to RA at event age · boosts CPF LIFE payout · reduces property value in projection"}
                             {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && "HDB annuity premium → RA · boosts CPF LIFE payout · capped at ERS ($440,800)"}
-                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "SHB RA bonus → RA · boosts CPF LIFE payout · typically $15,000–$30,000"}
+                            {(inputs.propMonetiseScheme ?? "downgrade") === "shb" && "Committed amount → RA · raises CPF LIFE payout · cash bonus → private assets"}
                           </p>
                           {(inputs.propMonetiseScheme ?? "downgrade") === "lbs" && (
                             <div style={{ marginTop: 6, background: "rgba(var(--clr-blue-rgb),0.06)", border: "1px solid rgba(var(--clr-blue-rgb),0.2)", borderRadius: 8, padding: "8px 10px", fontSize: 12, color: "#93c5fd", lineHeight: 1.5 }}>

@@ -3,7 +3,7 @@
  * Extracted from App.jsx (App_170) — logic unchanged.
  */
 import { _cpfEngineInit, balaRatio, makeComputeGF } from './common.js';
-import { ANNUAL_LIMIT, CPF_RATES, MMSS_PILOT_END_YEAR, MMSS_PILOT_START_YEAR, RETIREMENT_SUMS_2026, projectedSum, getDpsPremiumForAge, getPRRates, scAllocBand, scEmployeeRate } from '../policy/cpf2026.js';
+import { ANNUAL_LIMIT, CPF_RATES, MMSS_PILOT_END_YEAR, MMSS_PILOT_START_YEAR, RETIREMENT_SUMS_2026, projectedSum, getDpsPremiumForAge, getPRRates, scAllocBand, scEmployeeRate, silverHousingBonus, SHB, cohortFRS } from '../policy/cpf2026.js';
 
 // ── BUG-5 fix: runProjectionWithDWZ ─────────────────────────────────────────
 // Shared Die-with-Zero multi-pass wrapper — extracts the DWZ logic that was
@@ -321,14 +321,17 @@ export function runProjectionEngine(inputs, {
   let totalInjected = 0, totalInterest = 0, totalOutSpent = 0;
   // #3 Property CPF refund: track cumulative OA housing withdrawals for refund calc
   const sellPropertyAge = Number(inputs.sellPropertyAge) || 0;
-  let cumHousingOA = 0;        // tracks cumulative OA used for housing (principal)
+  // housingCpfUsedToDate: CPF already used for the home, with accrued interest, as shown on the
+  // member's CPF statement today. It keeps accruing 2.5% a year and is refunded at sale with the rest.
+  const housingCpfUsedToDate = Math.max(0, Number(inputs.housingCpfUsedToDate) || 0);
+  let cumHousingOA = housingCpfUsedToDate; // tracks cumulative OA used for housing (principal)
   let cumEduOut = 0;           // P3-B: cumulative OA education loan withdrawals for 40% cap anchoring
   // cumHousingFV tracks the compound future value of ALL OA housing withdrawals at 2.5%/yr.
   // Each year: cumHousingFV = (cumHousingFV + activeHousing) * 1.025
   // This correctly compounds each year's withdrawal forward from its own date.
   // At sell time: totalRefund = cumHousingFV (principal + compounded interest).
   // Accrued interest = cumHousingFV - cumHousingOA.
-  let cumHousingFV = 0;
+  let cumHousingFV = housingCpfUsedToDate;
   let refundApplied = startAge >= sellPropertyAge && sellPropertyAge > 0;
   // Track SA/RA cash top-ups (vcSa + govGrant + mrss) and interest earned on RA
   // separately — needed to compute the correct 20% RA-to-OA transfer base.
@@ -365,6 +368,9 @@ export function runProjectionEngine(inputs, {
   const propMonetiseAge = Number(inputs.propMonetiseAge) || 65;
   const propMonetiseCash = Number(inputs.propMonetiseCashProceeds) || 0;
   const propMonetiseRaTopup = Number(inputs.propMonetiseRaTopup) || 0;
+  const propMonetiseIsShb = propMonetiseEnabled && inputs.propMonetiseScheme === 'shb';
+  let rstuRejectedYear = 0; // cash top-up CPF would not accept this year (account already at its limit)
+  let shbThisYear = null; // { committed, bonus } in the year a Silver Housing Bonus event happens
   let propMonetiseApplied = startAge >= propMonetiseAge && propMonetiseEnabled;
   // LBS ongoing monthly payout — only active when scheme is 'lbs'
   const _lbsMonthlyPE = (propMonetiseEnabled && inputs.propMonetiseScheme === 'lbs') ? (Number(inputs.lbsMonthlyPayout) || 0) : 0;
@@ -415,6 +421,7 @@ export function runProjectionEngine(inputs, {
   const bhsLockedYear = Math.max(2026, baseYear + (65 - startAge));
 
   for (let age = startAge; age <= maxAge; age++) {
+    rstuRejectedYear = 0;
     let yearInflow = 0;
     // Per-category flow trackers (reset each year for cashflow ledger)
     let yearMandatory = 0;
@@ -994,6 +1001,12 @@ export function runProjectionEngine(inputs, {
           ? Math.round(overrideVcSA * vc3aScale) + (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq
           : Math.round(vc3aSA * vc3aScale) + (Number(inputs.vcSaTopup) || 0) * effVcSaFreq + (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
         const cappedVcMA = Math.round(vc3aMA * vc3aScale);
+        // The cash top-up (RSTU) part of cappedVcSA. CPF accepts it only up to the current Full
+        // Retirement Sum below 55, or the current Enhanced Retirement Sum from 55. The rest is not
+        // taken into CPF at all (the member keeps the cash); it does NOT spill into the OA.
+        const rstuGross = Math.min(cappedVcSA, overrideVcSA !== undefined
+          ? Math.round(overrideVcSA * vc3aScale) : (Number(inputs.vcSaTopup) || 0) * effVcSaFreq);
+        const otherVcSA = cappedVcSA - rstuGross; // VC3A share and grants
 
         const totalOA = mandatoryOA_i + cappedVcOA + wisOA;
         // BHS cap on MA — B3: priority split so mandatory gets first claim, then vc3a MA, then WIS MA
@@ -1060,26 +1073,35 @@ export function runProjectionEngine(inputs, {
           oa += (mandatorySA_dyn - mandToRA);
           // VC3A: RA cap is FRS (not ERS — ERS applies only to RSTU cash top-ups)
           const projFRS_vc3a_emp = Math.round(projectedSum('FRS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+          const projERS_rstu_emp = Math.round(projectedSum('ERS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+          const rstuToRA = Math.min(rstuGross, Math.max(0, projERS_rstu_emp - ra));
+          ra += rstuToRA;
+          rstuRejectedYear = rstuGross - rstuToRA;
           const vcRoomInRA = Math.max(0, projFRS_vc3a_emp - ra);
-          const vcToRA = Math.min(cappedVcSA + maSpillEmp + wisSA, vcRoomInRA);
+          const vcToRA = Math.min(otherVcSA + maSpillEmp + wisSA, vcRoomInRA);
           ra += vcToRA;
-          oa += (cappedVcSA + maSpillEmp + wisSA - vcToRA);
+          oa += (otherVcSA + maSpillEmp + wisSA - vcToRA);
           ra += actualMrss_emp;
-          cumRaCashTopUps += vcToRA + actualMrss_emp;
+          cumRaCashTopUps += rstuToRA + vcToRA + actualMrss_emp;
         } else {
           // MA spill to SA is capped at FRS — excess above FRS overflows to OA
           const projFRS_sa = Math.round(projectedSum('FRS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
           // Mandatory contributions always go to the SA: the Full Retirement Sum limits
           // top-ups, transfers and MediSave overflow, not contributions from wages (CPF Board).
           sa += mandatorySA_dyn;
-          const cappedToSA = cappedVcSA + maSpillEmp + wisSA + actualMrss_emp;
+          const rstuToSA = Math.min(rstuGross, Math.max(0, projFRS_sa - sa));
+          sa += rstuToSA;
+          rstuRejectedYear = rstuGross - rstuToSA;
+          const cappedToSA = otherVcSA + maSpillEmp + wisSA + actualMrss_emp;
           const saRoom = Math.max(0, projFRS_sa - sa);
           const actualToSA = Math.min(cappedToSA, saRoom);
           const saOverflow = cappedToSA - actualToSA;
           sa += actualToSA;
-          oa += saOverflow; // voluntary / overflow amounts above the FRS go to OA
-          cumRaCashTopUps += cappedVcSA + maSpillEmp + wisSA + actualMrss_emp;
+          oa += saOverflow; // VC3A share and MediSave overflow above the FRS go to OA
+          cumRaCashTopUps += rstuToSA + otherVcSA + maSpillEmp + wisSA + actualMrss_emp;
         }
+        // A top-up CPF would not accept never entered CPF: take it back out of the year's inflow.
+        if (rstuRejectedYear > 0) { yearInflow -= rstuRejectedYear; totalInjected -= rstuRejectedYear; yearVoluntary -= rstuRejectedYear; }
 
         // ── VHR: Housing Refund — route to RA/SA before OA when below FRS ─────
         if (vcVhrAmtEff > 0) {
@@ -1105,21 +1127,24 @@ export function runProjectionEngine(inputs, {
     // vcMaCash is already handled unconditionally above — no change needed there.
     // NOTE: vc3aScale is deliberately NOT applied here — RSTU sits outside the CPF
     // Annual Limit and must not be multiplied by the VC3A pro-rata scale factor.
-    if (!isForeigner && age >= contribStop) {
+    // Self-employed members' top-ups are also handled here while they work: their contribution
+    // branch above covers MediSave and VC3A only.
+    if (!isForeigner && (age >= contribStop || isSEP)) {
       const vcSaAmt = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
       if (vcSaAmt > 0) {
         const yrOffset = Math.max(0, (baseYear + (age - startAge)) - 2026);
-        const projERS_rstu = Math.round(RETIREMENT_SUMS_2026.FRS * 2 * Math.pow(1 + rsGrowth, yrOffset));
+        const projERS_rstu = Math.round(projectedSum('ERS', rsGrowth, yrOffset));
         let actualVcSa = 0;
         if (age >= 55) {
           const raRoom = Math.max(0, projERS_rstu - ra);
           actualVcSa = Math.min(vcSaAmt, raRoom);
+          rstuRejectedYear += vcSaAmt - actualVcSa;
           // MRSS eligibility: SC-only, check RA BEFORE top-up, income ≤ $4k, lifetime cap $20k
           // BUG-4 fix: direct BRS projection — ERS/4 was arithmetically equivalent but fragile.
           const projBRS_rstu = Math.round(projectedSum('BRS', rsGrowth, yrOffset));
           // BUG-3 fix: PwD is a bypass for the under-55 requirement only — must include age < 55.
           const mrssAgeOk = age >= 55 || (isPwD && age < 55);
-          const mrssEligible = isSC && mrssAgeOk && ra < projBRS_rstu && mmssMonthlyIncome <= 4000 && cumMrssReceived < 20000 && actualVcSa > 0;
+          const mrssEligible = !(isSEP && age < contribStop) /* working self-employed: matched in their own branch */ && isSC && mrssAgeOk && ra < projBRS_rstu && mmssMonthlyIncome <= 4000 && cumMrssReceived < 20000 && actualVcSa > 0;
           ra += actualVcSa;
           cumRaCashTopUps += actualVcSa;
           if (mrssEligible) {
@@ -1132,6 +1157,7 @@ export function runProjectionEngine(inputs, {
           const projFRS_rstu = Math.round(projERS_rstu / 2);
           const saRoom = Math.max(0, projFRS_rstu - sa);
           actualVcSa = Math.min(vcSaAmt, saRoom);
+          rstuRejectedYear += vcSaAmt - actualVcSa;
           sa += actualVcSa;
           cumRaCashTopUps += actualVcSa;
         }
@@ -1256,7 +1282,11 @@ export function runProjectionEngine(inputs, {
       // cumHousingFV = FV of all OA housing withdrawals compounded at 2.5%/yr per withdrawal date.
       // This correctly compounds each withdrawal from its own year — no lump-sum assumption.
       // Accrued interest = cumHousingFV - cumHousingOA (principal).
-      const totalRefund = Math.round(cumHousingFV);
+      // CPF Board: when a home is sold at market value, the refund is limited to what the sale brings
+      // in after the outstanding loan; any shortfall need not be made up in cash.
+      const saleNet = (inputs.includeProperty !== false && currentPropValue > 0)
+        ? Math.max(0, currentPropValue - (Number(inputs.loanOwedAtSale) || 0)) : Infinity;
+      const totalRefund = Math.round(Math.min(cumHousingFV, saleNet));
       // Step 1: Full refund credited to OA
       oa += totalRefund;
       yearInflow += totalRefund;
@@ -1277,6 +1307,12 @@ export function runProjectionEngine(inputs, {
           // 20% RA-to-OA transfer at payout age (raTransferBase was understated).
         }
         // Surplus above FRS stays in OA — ERS top-up is always optional
+      } else if (age >= 55) {
+        // CPF Board: from 55, the housing refund first tops up the Retirement Account to the member's
+        // own Full Retirement Sum (fixed in the year they turned 55); the rest stays in the OA.
+        const frsOwn = cohortFRS(baseYear - startAge + 55, rsGrowth);
+        const toRA = Math.min(totalRefund, Math.max(0, frsOwn - ra), oa);
+        if (toRA > 0) { oa -= toRA; ra += toRA; }
       }
       // Step 3: Property value removed from net worth (sold)
       currentPropValue = 0;
@@ -1330,19 +1366,29 @@ export function runProjectionEngine(inputs, {
     }
 
     // Property Monetisation — one-time event (downgrade / LBS / Silver Housing Bonus)
+    shbThisYear = null;
     if (propMonetiseEnabled && age === propMonetiseAge && !propMonetiseApplied) {
-      // Cash proceeds credited to private assets (member's bank account)
-      privateAssets += propMonetiseCash;
-      // RA top-up (e.g. Silver Housing Bonus CPF component, or LBS annuity lump-sum to RA)
-      if (propMonetiseRaTopup > 0 && !isForeigner) { // B1: foreigners have no RA — RA top-up silently skipped; cash proceeds still flow to privateAssets above
-        ra += propMonetiseRaTopup;
-        cumRaCashTopUps += propMonetiseRaTopup;
-        yearInflow += propMonetiseRaTopup;
-        totalInjected += propMonetiseRaTopup;
-        yearVoluntary += propMonetiseRaTopup; // P1-C fix: classify in ledger so sub-bucket sum matches yearInflow
+      // Amount that goes into the RA. For the Silver Housing Bonus the commitment is limited to
+      // $60,000 a household and to the room below the prevailing Full Retirement Sum (HDB).
+      let raTopupNow = isForeigner ? 0 : propMonetiseRaTopup; // B1: foreigners have no RA
+      let bonusNow = 0;
+      if (propMonetiseIsShb && !isForeigner) {
+        const frsNow = Math.round(projectedSum('FRS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        raTopupNow = Math.min(propMonetiseRaTopup, SHB.maxCommit, Math.max(0, frsNow - ra));
+        bonusNow = silverHousingBonus({ committed: raTopupNow, nextFlat: inputs.shsToFlat === '2r' ? '2r' : '3r' });
       }
+      // Cash proceeds (and any Silver Housing Bonus, which is paid in cash) → private assets
+      privateAssets += propMonetiseCash + bonusNow;
+      if (raTopupNow > 0) {
+        ra += raTopupNow;
+        cumRaCashTopUps += raTopupNow;
+        yearInflow += raTopupNow;
+        totalInjected += raTopupNow;
+        yearVoluntary += raTopupNow; // P1-C fix: classify in ledger so sub-bucket sum matches yearInflow
+      }
+      shbThisYear = propMonetiseIsShb ? { committed: Math.round(raTopupNow), bonus: bonusNow } : null;
       // Property value reduced to reflect downgrade / LBS (approximate: remove proceeds from property value)
-      currentPropValue = Math.max(0, currentPropValue - propMonetiseCash - propMonetiseRaTopup);
+      currentPropValue = Math.max(0, currentPropValue - propMonetiseCash - raTopupNow);
       propMonetiseApplied = true;
     }
     // LBS ongoing monthly payout — HDB pays from propMonetiseAge until lbsPayoutEndAge
@@ -1495,6 +1541,8 @@ export function runProjectionEngine(inputs, {
       age,
       oa: Math.round(oa), sa: Math.round(sa),
       ma: Math.round(ma), ra: Math.round(ra),
+      ...(rstuRejectedYear > 0 ? { topUpNotAccepted: Math.round(rstuRejectedYear) } : {}),
+      ...(shbThisYear ? { shbCommitted: shbThisYear.committed, shbBonus: shbThisYear.bonus } : {}),
       raStart: Math.round(raOpen), // RA on the birthday that starts this age year (see raAtPayoutStart)
       total: Math.round(oa + sa + ma + ra),
       propertyValue: Math.round(currentPropValue),
