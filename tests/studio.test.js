@@ -3,21 +3,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_ANSWERS, buildPlan } from '../src/model/plan.js';
 import { CHAPTERS, cleanStudio, todayScene, chapterWhen, buildingScene, turning55Scene, payoutScene, sumsForYear,
-  makeMove, undoMove, myPlanScene, nextChapter, prevChapter } from '../src/model/studio.js';
+  makeMove, undoMove, myPlanScene, nextChapter, prevChapter, homeScene, laterScene, legacyScene, whatIf, KEY_CHAPTER, describeChange } from '../src/model/studio.js';
 import { interpolateCpfLife, raAtPayoutStart } from '../src/engine/cpfLife.js';
 import { cleanState } from '../src/model/clients.js';
 
 const NOW = new Date('2026-11-16T12:00:00+08:00');
 const plan = (over = {}) => buildPlan({ ...DEFAULT_ANSWERS, ...over }, NOW);
 
-test('chapters run in life order and end with My plan; Phase 1 builds the core story', () => {
+test('chapters run in life order and end with My plan; all but Family are built', () => {
   assert.deepEqual(CHAPTERS.map((c) => c.id), ['today', 'building', 'family', 'home', 'turning55', 'payout', 'later', 'legacy', 'plan']);
-  assert.deepEqual(CHAPTERS.filter((c) => c.ready).map((c) => c.id), ['today', 'building', 'turning55', 'payout', 'plan']);
+  assert.deepEqual(CHAPTERS.filter((c) => !c.ready).map((c) => c.id), ['family']);
   // Next / back skip chapters not built yet
-  assert.equal(nextChapter('building').id, 'turning55');
-  assert.equal(nextChapter('payout').id, 'plan');
+  assert.equal(nextChapter('building').id, 'home');
+  assert.equal(nextChapter('payout').id, 'later');
+  assert.equal(nextChapter('legacy').id, 'plan');
   assert.equal(nextChapter('plan'), null);
-  assert.equal(prevChapter('turning55').id, 'building');
+  assert.equal(prevChapter('home').id, 'building');
   assert.equal(prevChapter('today'), null);
   for (const c of CHAPTERS) assert.match(c.question, /\?$/, `${c.id} opens with a question`);
 });
@@ -169,4 +170,51 @@ test('My plan: each move shows what it adds, worked out by re-running the plan w
   const changed = myPlanScene(buildPlan({ ...a, ...m2.change, payoutAge: 69 }, NOW), [m1, m2], NOW);
   assert.equal(changed.moves[0].active, false);
   assert.equal(changed.moves[0].gain, 0);
+});
+
+const HOME = { ownsHome: true, homeValue: 600000, cpfUsedForHome: 120000, housingMonthly: 1500, housingEndAge: 60, targetIncome: 4500 };
+
+test('Home: the loan effect is the plan re-run without the loan; a sale adds the planner sale figures', () => {
+  const p = plan(HOME), h = homeScene(p, NOW);
+  assert.equal(h.loanEffect, p.incomeToday - plan({ ...HOME, housingMonthly: 0 }).incomeToday);
+  assert.ok(h.loanEffect < 0);
+  assert.equal(h.loanLeft, Math.round(p.rows.reduce((t, r) => t + (r.yearHousingOut || 0), 0)));
+  assert.equal(h.sale, null);
+  const sold = plan({ ...HOME, sellHomeAge: 66, nextHomeCost: 300000 }), hs = homeScene(sold, NOW);
+  assert.equal(hs.sale.age, 66);
+  assert.equal(hs.saleEffect, sold.incomeToday - plan({ ...HOME, sellHomeAge: 0, nextHomeCost: 300000 }).incomeToday);
+  assert.equal(hs.saleParts.life + hs.saleParts.oa + hs.saleParts.other, hs.saleEffect);
+  assert.equal(hs.shbOpen, true); // citizen selling at 55 or later
+  assert.equal(homeScene(plan({ ...HOME, status: 'PR3', sellHomeAge: 66 }), NOW).shbOpen, false);
+});
+
+test('Later life: health costs and the worst of the five worse cases', () => {
+  const l = laterScene(plan(), NOW);
+  assert.equal(l.cases.length, 5);
+  assert.equal(l.worst.delta, Math.min(...l.cases.map((c) => c.delta)));
+  assert.ok(l.health.points.length > 0);
+});
+
+test('Legacy: what is left adds Ordinary Account savings and unused CPF LIFE premium', () => {
+  const g = legacyScene(plan());
+  assert.deepEqual(g.left.map((x) => x.age), [75, 80, 85, 90, 95]);
+  for (const x of g.left) assert.equal(x.total, x.oa + (x.life || 0));
+  assert.equal(g.at85.age, 85);
+  const kept = legacyScene(plan({ oaKeep: 100000 }));
+  assert.ok(kept.at85.oa > g.at85.oa, 'keeping savings back leaves more');
+  assert.equal(legacyScene(plan({ lifePlan: 'bas' })).basic, true);
+});
+
+test('What if: best moves and target answers open the chapter that owns the setting', () => {
+  const w = whatIf({ ...DEFAULT_ANSWERS, targetIncome: 4500 }, NOW);
+  assert.ok(w.best.length > 0 && w.best.length <= 3);
+  for (const m of w.best) {
+    assert.ok(m.gain > 0);
+    for (const k of Object.keys(m.change)) assert.equal(KEY_CHAPTER[k], m.chapter);
+    assert.ok(CHAPTERS.find((c) => c.id === m.chapter).ready, `${m.chapter} is built`);
+  }
+  assert.equal(w.topUp.chapter, 'turning55');
+  assert.ok(w.topUp.amount > 0);
+  // every setting a chapter can change has plain words
+  for (const k of Object.keys(KEY_CHAPTER)) assert.doesNotMatch(describeChange(k, DEFAULT_ANSWERS[k] || 1), new RegExp(`^${k}:`));
 });

@@ -354,7 +354,7 @@ const WORK_BAR = [['overview', 'Overview'], ['moves', 'Moves'], ['compare', 'Com
 const WORK_ONLY = ['overview', 'household', 'property', 'topups', 'healthcare', 'drawdown', 'solve', 'confidence', 'more'];
 Object.assign(ICONS, {
   overview: ICONS.plan, household: 'M9 11a3 3 0 100-6 3 3 0 000 6zM17 11a3 3 0 100-6M3 20a6 6 0 0112 0M15 14a6 6 0 016 6',
-  property: 'M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10', topups: 'M12 3v18M7 8h7a3 3 0 010 6H9a3 3 0 000 6h8',
+  property: 'M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10', studio: 'M4 5a2 2 0 012-2h14v16H6a2 2 0 00-2 2zM4 19V5M9 7h7M9 11h5', topups: 'M12 3v18M7 8h7a3 3 0 010 6H9a3 3 0 000 6h8',
   confidence: 'M3 20h18M6 20v-5M10 20v-9M14 20V7M18 20v-7', healthcare: 'M12 5v14M5 12h14M4 4h16v16H4z', drawdown: 'M12 3v12M7 10l5 5 5-5M4 21h16', solve: 'M11 18a7 7 0 100-14 7 7 0 000 14zM21 21l-5-5', more: 'M5 12h.01M12 12h.01M19 12h.01',
 });
 const EMPTY = { answers: DEFAULT_ANSWERS, tried: {}, done: false, scenarios: [] };
@@ -467,6 +467,12 @@ export default function GuidedApp() {
   // The screen to show for this plan: Guided has Plan; Workspace and Adviser have Overview and modules.
   const view = !work && WORK_ONLY.includes(tab) ? 'plan' : work && tab === 'plan' ? 'overview' : tab;
   const barTabs = work ? WORK_BAR : TABS;
+  // Fusion Studio works on the personal plan, so it is not offered while a client file is open.
+  const studioLink = (cls) => (clientId ? null : (
+    <a className={cls} href="/app/studio/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS.studio} /></svg>Studio <span className="brand-beta">PREVIEW</span>
+    </a>
+  ));
   const navButton = ([id, label]) => (
     <button key={id} type="button" className={view === id || (id === 'more' && !WORK_BAR.some(([b]) => b === view)) ? 'on' : ''} aria-current={view === id ? 'page' : undefined} onClick={() => setTab(id)}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[id]} /></svg>{label}
@@ -505,7 +511,7 @@ export default function GuidedApp() {
         <Setup key={clientId || 'me'} answers={answers} title={client ? `Setting up ${client.name}'s plan` : null} onDone={(a) => setState((s) => ({ ...s, answers: a, tried: {}, done: true }))} />
       ) : (
         <div className={`wrap ${work && showTabs ? 'layout' : ''}`}>
-          {work && showTabs && <nav className="side-nav" aria-label="Planner sections">{WORK_NAV.map(navButton)}</nav>}
+          {work && showTabs && <nav className="side-nav" aria-label="Planner sections">{WORK_NAV.map(navButton)}{studioLink('side-link')}</nav>}
           <main className={`main ${showTabs ? '' : 'no-tabs'}`} id="main">
           {welcome && <p className="preview-note ok-note no-print" role="status"><span>Test payment recorded. Your plan is now <b>{tierName(ownTier)}</b>. No money was taken.</span> <button type="button" className="link" onClick={() => setWelcome(false)}>Dismiss</button></p>}
           {tier !== ownTier && <p className="preview-note no-print" role="status"><span>Previewing the <b>{tierName(tier)}</b> plan{client ? ` with ${client.name}'s file open` : ''}.</span> <button type="button" className="link" onClick={() => setPreview(null)}>Back to {tierName(ownTier)}</button></p>}
@@ -527,7 +533,8 @@ export default function GuidedApp() {
           {view === 'more' && <>
             <section className="lead compact"><p className="eyebrow">All sections</p><h1>Where to next?</h1></section>
             <ul className="more-list">{WORK_NAV.map(([id, label]) => <li key={id}><button type="button" className="panel" onClick={() => setTab(id)}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[id]} /></svg>{label}</button></li>)}</ul>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[id]} /></svg>{label}</button></li>)}
+              {!clientId && <li>{studioLink('panel')}</li>}</ul>
           </>}
           </main>
         </div>

@@ -1,7 +1,7 @@
 {
   "name": "fusion",
   "private": true,
-  "version": "3.4.0-studio.3",
+  "version": "3.4.0-studio.4",
   "type": "module",
   "description": "Fusion 富生 — CPF retirement planner and website (Cloudflare Worker)",
   "scripts": {

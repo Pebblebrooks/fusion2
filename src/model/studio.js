@@ -3,19 +3,20 @@
  * Every figure comes from buildPlan (src/model/plan.js), which runs the same CPF engine as the
  * planner and the classic planner. Screens never work numbers out themselves.
  */
-import { DEFAULT_ANSWERS, buildPlan } from './plan.js';
-import { RETIREMENT_SUMS_2026, RETIREMENT_SUMS_2027, projectedSum } from '../policy/cpf2026.js';
+import { DEFAULT_ANSWERS, buildPlan, findMoves, stressTests, taxSavedByTopUp } from './plan.js';
+import { healthcare, drawdown, solveStopWork, solveTopUp } from './household.js';
+import { RETIREMENT_SUMS_2026, RETIREMENT_SUMS_2027, projectedSum, SHB } from '../policy/cpf2026.js';
 
 /** Chapters in life order. `ready` = built in this release; the rest show as coming. */
 export const CHAPTERS = [
   { id: 'today', title: 'Today', question: 'Where do I stand today?', ready: true },
   { id: 'building', title: 'Building', question: 'Will my savings grow enough?', ready: true },
   { id: 'family', title: 'Family', question: 'What do my children and parents cost me?' },
-  { id: 'home', title: 'Home', question: 'How much CPF does my home use?' },
+  { id: 'home', title: 'Home', question: 'How much CPF does my home use?', ready: true },
   { id: 'turning55', title: 'Turning 55', question: 'What happens to my CPF at 55?', ready: true },
   { id: 'payout', title: 'Payout', question: 'How much will I get each month?', ready: true },
-  { id: 'later', title: 'Later life', question: 'Can I cope with health costs and shocks?' },
-  { id: 'legacy', title: 'Legacy', question: 'What will I leave behind?' },
+  { id: 'later', title: 'Later life', question: 'Can I cope with health costs and shocks?', ready: true },
+  { id: 'legacy', title: 'Legacy', question: 'What will I leave behind?', ready: true },
   { id: 'plan', title: 'My plan', question: 'What am I going to do?', ready: true },
 ];
 export const CHAPTER_IDS = CHAPTERS.map((c) => c.id);
@@ -183,6 +184,17 @@ export const describeChange = (key, value, plan) => {
     case 'payoutAge': return `Start CPF LIFE at ${value}`;
     case 'lifePlan': return `Choose the CPF LIFE ${PLAN_NAMES[value] || value} plan`;
     case 'oaSpreadTo': return `Spend Ordinary Account savings to age ${value}`;
+    case 'housingMonthly': return value > 0 ? `Pay ${money(value)} a month of your home loan from CPF` : 'Pay your home loan in cash, not from CPF';
+    case 'sellHomeAge': return value > 0 ? `Sell your home at ${value}` : 'Keep your home';
+    case 'nextHomeCost': return value > 0 ? `Next home costing ${money(value)} in today's prices` : 'No next home to buy';
+    case 'loanOwedAtSale': return `${money(value)} of home loan left when you sell`;
+    case 'shb': return value ? 'Claim the Silver Housing Bonus' : 'No Silver Housing Bonus';
+    case 'shbNextFlat': return value === '2r' ? 'Move to a 2-room or smaller flat' : 'Move to a 3-room flat';
+    case 'shbCommit': return `Commit ${money(value)} to your Retirement Account`;
+    case 'medInflation': return `Medical costs rise ${value}% a year`;
+    case 'ipPrivate': return value > 0 ? `Integrated Shield private part ${money(value)} a year` : 'MediShield Life only';
+    case 'medUsage': return `Medical bills of ${money(value)} a year from MediSave`;
+    case 'oaKeep': return value > 0 ? `Keep ${money(value)} of Ordinary Account savings untouched` : 'Spend all Ordinary Account savings';
     default: return `${key}: ${value}`;
   }
 };
@@ -218,5 +230,70 @@ export const myPlanScene = (plan, moves, now = new Date()) => {
     above: plan.target > 0 ? Math.max(0, plan.incomeToday - plan.target) : 0,
     status: plan.target <= 0 ? 'no-target' : plan.gapToday > 0 ? 'gap' : 'on-track',
     payoutAge: plan.payoutAge, life: plan.payoutToday, oa: plan.oaMonthlyToday, frsCoverage: plan.frsCoverage, age: plan.age,
+  };
+};
+
+/* ── Chapter 4: Home ─────────────────────────────────────────────────────── */
+/**
+ * What the home loan takes from the Ordinary Account, what that does to income, and (when a sale is
+ * in the plan) where the sale money goes. Each effect is the plan re-run without it.
+ */
+export const homeScene = (plan, now = new Date()) => {
+  const a = plan.answers, stop = plan.inputs.housingStopAge;
+  const loanLeft = Math.round(plan.rows.filter((r) => r.age >= plan.age).reduce((t, r) => t + (Number(r.yearHousingOut) || 0), 0));
+  const noLoan = a.housingMonthly > 0 ? buildPlan({ ...a, housingMonthly: 0 }, now) : null;
+  const keep = plan.sale ? buildPlan({ ...a, sellHomeAge: 0 }, now) : null;
+  return {
+    owns: !!a.ownsHome, monthly: Number(a.housingMonthly) || 0, loanEnds: stop, loanLeft, usedSoFar: Number(a.cpfUsedForHome) || 0,
+    loanEffect: noLoan ? plan.incomeToday - noLoan.incomeToday : 0,
+    oaShort: plan.watch.find((w) => w.key === 'oa-housing') || null,
+    sale: plan.sale, saleEffect: keep ? plan.incomeToday - keep.incomeToday : 0,
+    saleParts: keep ? { life: plan.payoutToday - keep.payoutToday, oa: plan.oaMonthlyToday - keep.oaMonthlyToday, other: plan.otherMonthlyToday } : null,
+    shbOpen: a.status === 'SC' && a.sellHomeAge >= SHB.minAge, shbMinAge: SHB.minAge, shbMaxCommit: SHB.maxCommit,
+  };
+};
+
+/* ── Chapter 7: Later life ───────────────────────────────────────────────── */
+/** Health costs against MediSave, and the plan under five worse cases (stress tests). */
+export const laterScene = (plan, now = new Date()) => {
+  const h = healthcare(plan);
+  const st = stressTests(plan.answers, now);
+  const cases = st.cases.map((c) => ({ key: c.key, label: c.label, income: c.incomeToday, delta: c.delta, gap: c.gapToday }));
+  const worst = cases.reduce((w, c) => (c.delta < w.delta ? c : w), cases[0]);
+  return { health: h, cases, worst, income: plan.incomeToday, target: plan.target, medInflation: plan.answers.medInflation };
+};
+
+/* ── Chapter 8: Legacy ───────────────────────────────────────────────────── */
+/** What would be left for family at 75 to 95: Ordinary Account savings, plus unused CPF LIFE premium. */
+export const legacyScene = (plan) => {
+  const d = drawdown(plan);
+  const left = d.left.map((x) => ({ ...x, total: x.oa + (x.life || 0) }));
+  const at85 = left.find((x) => x.age === 85) || left.at(-1) || null;
+  return { ...d, left, at85, lifePlan: plan.answers.lifePlan };
+};
+
+/* ── What if panel ───────────────────────────────────────────────────────── */
+/** Which chapter owns each setting, so a what-if opens where it can be tried and saved. */
+export const KEY_CHAPTER = {
+  realPayGrowth: 'building', stopWorkAge: 'building', topUpYearly: 'turning55', oaToSaYearly: 'turning55',
+  payoutAge: 'payout', lifePlan: 'payout', oaSpreadTo: 'payout', housingMonthly: 'home', sellHomeAge: 'home', nextHomeCost: 'home',
+  medInflation: 'later', ipPrivate: 'later', medUsage: 'later', oaKeep: 'legacy',
+};
+const chapterFor = (change) => KEY_CHAPTER[Object.keys(change)[0]] || 'payout';
+
+/**
+ * The best few moves (each measured by re-running the plan with that one change) and two answers
+ * worked backwards from the target: the earliest stop-work age, and the yearly top-up needed.
+ */
+export const whatIf = (answers, now = new Date()) => {
+  const { base, moves } = findMoves(answers, now, 3);
+  const best = moves.map((m) => ({ key: m.key, title: m.title, gain: m.gain, cost: m.cost, bonus: m.bonus, catch: m.catch, change: m.change, chapter: chapterFor(m.change) }));
+  const target = base.target;
+  const stop = target > 0 ? solveStopWork(answers, now) : null;
+  const topUp = target > 0 ? solveTopUp(answers, now) : null;
+  return {
+    income: base.incomeToday, target, gap: base.gapToday, best,
+    stopWork: stop && stop.possible ? { age: stop.age, change: { stopWorkAge: stop.age }, chapter: 'building' } : stop ? { possible: false, best: stop.best } : null,
+    topUp: topUp && topUp.possible ? { amount: topUp.amount, taxSaved: topUp.taxSaved ?? taxSavedByTopUp(base, topUp.amount), change: { topUpYearly: topUp.amount }, chapter: 'turning55' } : topUp ? { possible: false } : null,
   };
 };

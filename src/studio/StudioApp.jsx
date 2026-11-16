@@ -4,7 +4,7 @@
  * entered once. Studio writes its own part of the plan (chapter, saved moves) with from: 'studio'.
  * Figures come from src/model/studio.js, which takes them from the CPF engine via buildPlan.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_ANSWERS, buildPlan } from '../model/plan.js';
 import { CHAPTERS, chapterWhen, cleanStudio, makeMove, undoMove } from '../model/studio.js';
 import { loadPlan, savePlan, currentTier, getTheme, setTheme, PLAN_KEY } from '../next/storage.js';
@@ -13,11 +13,13 @@ import { VERSION_LABEL } from '../version.js';
 import TodayChapter from './Today.jsx';
 import { BuildingChapter, Turning55Chapter, PayoutChapter } from './Chapters.jsx';
 import MyPlanChapter from './MyPlan.jsx';
+import { HomeChapter, LaterChapter, LegacyChapter } from './LaterChapters.jsx';
+import WhatIfPanel from './WhatIf.jsx';
 
 const MAX_MOVES = 20;
 
 /* ── Shell ───────────────────────────────────────────────────────────────── */
-function Header({ theme, onTheme }) {
+function Header({ theme, onTheme, onWhatIf }) {
   return (
     <header className="app-header">
       <div className="wrap">
@@ -25,6 +27,7 @@ function Header({ theme, onTheme }) {
         <span className="st-name">Studio</span>
         <span className="brand-beta">PREVIEW</span>
         <div className="header-actions st-actions">
+          {onWhatIf && <button type="button" className="btn btn-secondary" onClick={onWhatIf}>What if…</button>}
           <a className="btn btn-ghost st-back" href="/app/">Back to planner</a>
           <button type="button" className="icon-btn" onClick={onTheme} aria-label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}>
             {theme === 'dark'
@@ -129,13 +132,17 @@ export default function StudioApp() {
   const undo = (m) => commit({ ...state, answers: undoMove(state.answers, m), studio: { ...studio, moves: studio.moves.filter((x) => x.id !== m.id) } });
   const remove = (m) => commit({ ...state, studio: { ...studio, moves: studio.moves.filter((x) => x.id !== m.id) } });
   const flip = () => { const m = theme === 'dark' ? 'light' : 'dark'; setTheme(m); setThemeState(m); };
+  // What if panel: a suggestion opens its chapter with the change ready to save or undo.
+  const [whatIfOpen, setWhatIfOpen] = useState(false);
+  const closeWhatIf = useCallback(() => setWhatIfOpen(false), []);
+  const tryIt = (id, change) => { pick(id); setTrial(change); setWhatIfOpen(false); };
 
   const allowed = tier === 'plus' || tier === 'pro';
-  const props = { base, plan, val, lever, onPick: pick, trial: { label: move?.label, onSave: saveMove, onReset: () => setTrial({}) } };
+  const props = { base, plan, val, lever, now, onPick: pick, trial: { label: move?.label, onSave: saveMove, onReset: () => setTrial({}) } };
   return (
     <div className="app studio">
       <a className="skip-link" href="#st-main">Skip to content</a>
-      <Header theme={theme} onTheme={flip} />
+      <Header theme={theme} onTheme={flip} onWhatIf={allowed ? () => setWhatIfOpen(true) : null} />
       {allowed && <Journey plan={base} current={chapter} onPick={pick} />}
       <main id="st-main" className="wrap st-main">
         {!allowed && <Locked tier={tier} />}
@@ -148,9 +155,13 @@ export default function StudioApp() {
         {allowed && chapter === 'today' && <TodayChapter plan={base} answers={state.answers} onChange={update} sample={sample} onPick={pick} />}
         {allowed && chapter === 'building' && <BuildingChapter {...props} />}
         {allowed && chapter === 'turning55' && <Turning55Chapter {...props} />}
+        {allowed && chapter === 'home' && <HomeChapter {...props} onFact={update} />}
         {allowed && chapter === 'payout' && <PayoutChapter {...props} />}
+        {allowed && chapter === 'later' && <LaterChapter {...props} />}
+        {allowed && chapter === 'legacy' && <LegacyChapter {...props} />}
         {allowed && chapter === 'plan' && <MyPlanChapter plan={base} moves={studio.moves} now={now} onUndo={undo} onRemove={remove} onPick={pick} sample={sample} />}
       </main>
+      {allowed && whatIfOpen && <WhatIfPanel answers={state.answers} now={now} onTry={tryIt} onClose={closeWhatIf} />}
       <footer className="wrap st-foot small muted">Fusion 富生 Studio {VERSION_LABEL}</footer>
     </div>
   );

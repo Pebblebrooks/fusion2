@@ -252,9 +252,11 @@ table.data tbody th { font-weight: 500; color: var(--ink-2); text-align: left; w
 .layout { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 32px; align-items: start; max-width: 1240px; }
 .layout .main { max-width: none; padding-left: 0; padding-right: 0; }
 .side-nav { position: sticky; top: 88px; display: grid; gap: 2px; padding-top: 32px; }
-.side-nav button { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-2); font: 500 15px var(--font-body); text-align: left; cursor: pointer; }
-.side-nav button svg { width: 18px; height: 18px; flex-shrink: 0; }
-.side-nav button:hover { background: var(--sunken); color: var(--ink); }
+.side-nav button, .side-nav .side-link { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-2); font: 500 15px var(--font-body); text-align: left; cursor: pointer; }
+.side-nav button svg, .side-nav .side-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+.side-nav button:hover, .side-nav .side-link:hover { background: var(--sunken); color: var(--ink); }
+.side-nav .side-link { text-decoration: none; margin-top: 8px; border-top: 1px solid var(--border); border-radius: 0 0 10px 10px; padding-top: 8px; }
+.side-nav .side-link .brand-beta, .more-list a .brand-beta { margin-left: auto; }
 .side-nav button.on { background: var(--brand-tint); color: var(--brand); font-weight: 600; }
 .side-nav button:nth-child(9) { margin-top: 12px; }
 .tabs.work { display: none; }
@@ -277,7 +279,8 @@ table.waterfall td { font-size: 16px; } table.waterfall tr.total th, table.water
 .hist span:hover { filter: brightness(1.15); }
 .hist-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
 .more-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.more-list button { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 64px; color: var(--ink); font: 600 16px var(--font-body); text-align: left; cursor: pointer; }
+.more-list button, .more-list a { width: 100%; text-decoration: none; display: flex; align-items: center; gap: 12px; min-height: 64px; color: var(--ink); font: 600 16px var(--font-body); text-align: left; cursor: pointer; }
+.more-list a:hover { color: var(--ink); }
 .more-list svg { width: 22px; height: 22px; color: var(--brand); flex-shrink: 0; }
 .save-row .pick { margin: 0; }
 

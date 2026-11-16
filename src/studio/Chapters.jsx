@@ -122,8 +122,8 @@ export function Turning55Chapter({ base, plan, val, lever, trial, onPick }) {
           <p className="muted">Your Retirement Account is above the Enhanced Retirement Sum, so there is nothing to top up. Payout shows what it pays.</p>
         ) : (
           <div className="st-lever-grid">
-            <Slider id="l-topup" label={`Cash top-up to your ${plan.age < 55 ? 'Special' : 'Retirement'} Account each year`} value={val('topUpYearly')} min={0} max={16000} step={500} onChange={(v) => lever('topUpYearly', v)} format={money} />
-            {plan.age < 55 && <Slider id="l-oasa" label="Move from Ordinary to Special Account each year" value={val('oaToSaYearly')} min={0} max={20000} step={500} onChange={(v) => lever('oaToSaYearly', v)} format={money} />}
+            <Slider id="l-topup" label={`Cash top-up to your ${plan.age < 55 ? 'Special' : 'Retirement'} Account each year`} value={val('topUpYearly')} min={0} max={Math.max(16000, val('topUpYearly'))} step={500} onChange={(v) => lever('topUpYearly', v)} format={money} />
+            {plan.age < 55 && <Slider id="l-oasa" label="Move from Ordinary to Special Account each year" value={val('oaToSaYearly')} min={0} max={Math.max(20000, val('oaToSaYearly'))} step={500} onChange={(v) => lever('oaToSaYearly', v)} format={money} />}
           </div>
         )}
         <TrialBar {...trial} base={base} plan={plan} />

@@ -6,6 +6,15 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.4.0-studio.4 — 16 Nov 2026
+Fusion Studio, Phase 2 part 1 (studio branch preview only). No change to calculations: the new chapters use the planner's existing, tested models.
+- **Home:** what the home loan takes from the Ordinary Account and what that costs in monthly income (the plan re-run without it); a warning if the Ordinary Account runs out before the loan ends. Facts about the home save as you type. Try selling or right-sizing, a next home and the Silver Housing Bonus; Show how has where the sale money goes and the CPF refund.
+- **Later life:** the chance your income meets your target (500 runs), your income if one thing goes worse (five cases), and when MediSave runs out with the cash needed to 90. Try other medical-cost rises, an Integrated Shield private part and medical bills.
+- **Legacy:** what would be left for family at 75 to 95 (Ordinary Account savings plus CPF LIFE premium not yet paid out), and how CPF nominations work. Try keeping savings untouched or spending them to a different age.
+- **What if panel** (header button, any chapter): your three best moves, the yearly top-up that meets your target, and the earliest age you could stop work. Try it opens the chapter that owns the setting with the change ready to save.
+- **Planner:** Workspace and Adviser side menus (and More on phones) link to Studio, marked Preview. Hidden while an Adviser has a client file open, because Studio works on your own plan.
+- Family is not built yet: it needs new plan fields (see the Studio proposal doc).
+
 ## 3.4.0-studio.3 — 16 Nov 2026
 Fusion Studio, Phase 1: the core story (studio branch preview only). No change to calculations; every figure comes from the same engine as the planner.
 - **Building:** your CPF at 55 (or at payout age once past 55) in today's dollars, with the savings chart. Try a different pay rise or stop-work age. Show how: balances every five years, and money in, interest and money out, which add up to the balance at 55.
