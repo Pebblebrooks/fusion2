@@ -6038,7 +6038,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
     'oaBalance','saBalance','maBalance',
     'salaryGross','salaryBonus','netTradeIncome',
     'empOaCont','empSaCont','empMaCont',
-    'housingOutflow','medicalUsage','medishieldIP','medishieldMode','elderCareShield',
+    'housingOutflow','medicalUsage','medishieldIP','medishieldMode','elderCareShield','ipPrivatePremium','careShieldCatchUp',
     'propertyValue',
     'vc3aCash','vcSaTopup','vcVhr','vcMaCash',
     'annualGovGrant','govGrantMa','wisAmount',     // BUG-E fix: removed dead mrssGrant/mmssGrant (engine ignores them; always 0)
@@ -17939,7 +17939,7 @@ ${milestoneSnapshotHtml}
                     <span style={{ fontSize: 12, fontWeight: 800, color: "#f472b6", textTransform: "uppercase", letterSpacing: "0.07em" }}>Medical</span>
                   </div>
 
-                  {[["medicalUsage","Medical Usage (MA) — Annual","annual","t-medical-usage","Annual MA withdrawal for approved medical expenses — GP, specialist, hospitalisation, day surgery. Deducted from MA each year. Grows with the Medical Inflation Rate. Excludes MediShield Life and CareShield premiums (enter those below). Check your CPF transaction history for a typical annual amount."],["medishieldIP","MediShield Life / IP (MA) — Annual","annual","t-medishield","Annual MediShield Life premium (compulsory) plus any Integrated Shield Plan rider deducted from MA. MediShield Life covers basic hospitalisation; IP riders upgrade to Class A ward or private hospital. Premiums escalate steeply with age — check your insurer's schedule."],["elderCareShield","ElderShield / CareShield (MA) — Annual","annual","t-careshield","Annual CareShield Life (or legacy ElderShield) premium deducted from MA. CareShield Life is compulsory for SC/PR born on or after 1 Oct 1980 from age 30, providing payouts for severe disability. Premium payable until age 67."]].map(([n, l, freq, tipId, tipText]) => (
+                  {[["medicalUsage","Medical Usage (MA) — Annual","annual","t-medical-usage","Annual MA withdrawal for approved medical expenses — GP, specialist, hospitalisation, day surgery. Deducted from MA each year. Grows with the Medical Inflation Rate. Excludes MediShield Life and CareShield premiums (enter those below). Check your CPF transaction history for a typical annual amount."],["medishieldIP","MediShield Life + IP (Manual mode) — Annual","annual","t-medishield","Used only when MSL Premium Mode is Manual: your whole yearly MediShield Life plus Integrated Shield Plan premium, without riders. The MediShield Life part is paid from MediSave in full; the private part only up to the MOH limit for your age ($300 to age 40, $600 from 41 to 70, $900 from 71). The rest is cash and is not taken from MediSave. In Auto mode this field is ignored."],["ipPrivatePremium","Integrated Shield, Private Part (Auto mode) — Annual","annual","t-ip-private","Used in Auto mode: the extra yearly premium your insurer charges on top of MediShield Life, without riders. MediSave pays up to the MOH limit for your age ($300 to age 40, $600 from 41 to 70, $900 from 71); the rest is cash. Leave at 0 if you have MediShield Life only."],["elderCareShield","ElderShield / CareShield (MA) — Annual","annual","t-careshield","Annual CareShield Life (or legacy ElderShield) base premium deducted from MA. CareShield Life covers Citizens and PRs born in 1980 or later from age 30. Premiums are paid until age 67, or for 10 years after joining if that is later, and stop after that. The base premium rises with the Medical Inflation Rate until 67."],["careShieldCatchUp","CareShield Catch-Up Component — Annual","annual","t-careshield-catchup","For some members born in 1979 or earlier: a flat amount paid for 10 years from joining CareShield Life, on top of the base premium. See your figures at cpf.gov.sg/cshlpremiums. Leave at 0 if it does not apply."]].map(([n, l, freq, tipId, tipText]) => (
                     <div key={n}><div className="cpf-field-row" style={{ display: "flex", alignItems: "center", fontSize: 13, fontWeight: 700, color: "#f472b6", textTransform: "uppercase", marginBottom: 4 }}>
                       <span>{l.replace(" — Annual","")}<TooltipBox id={tipId} text={tipText} /></span>
                       <FieldResetBtn name={n} inputs={inputs} setInputs={setInputs} />
@@ -17948,9 +17948,9 @@ ${milestoneSnapshotHtml}
                   ))}
                   {/* B-04: MediShield Life auto/manual mode toggle */}
                   {(() => {
-                    const mslMode = inputs.medishieldMode || 'manual';
+                    const mslMode = inputs.medishieldMode || 'auto';
                     const currentAge_msl = Number(inputs.currentAge) || 35;
-                    const autoAmt = getMslPremiumForAge(currentAge_msl);
+                    const autoAmt = getMslPremiumForAge(currentAge_msl + 1); // premiums go by age next birthday
                     return (
                       <div style={{ background: "rgba(244,63,94,0.05)", border: "1px solid rgba(244,63,94,0.15)", borderRadius: 8, padding: "8px 12px" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: mslMode === 'auto' ? 6 : 0 }}>
@@ -17969,7 +17969,7 @@ ${milestoneSnapshotHtml}
                         </div>
                         {mslMode === 'auto' && (
                           <p style={{ fontSize: 11, color: "var(--text-subtle)", margin: 0, lineHeight: 1.5 }}>
-                            Age-banded schedule active. At age {currentAge_msl}: <strong style={{ color: "#f472b6" }}>${autoAmt.toLocaleString()}/yr</strong>. Scales with each projection year. Manual field above is ignored.
+                            Official MediShield Life premium for each age is used. At your next birthday: <strong style={{ color: "#f472b6" }}>${autoAmt.toLocaleString()}/yr</strong>, rising with the Medical Inflation Rate. The Manual-mode field above is ignored.
                           </p>
                         )}
                       </div>

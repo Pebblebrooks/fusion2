@@ -12,7 +12,7 @@ import { tierName, PLAN_RANK } from '../entitlements/tiers.js';
 import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink, loadBook, saveBook, newId, signOut } from './storage.js';
 import { VERSION_LABEL } from '../version.js';
 import SavingsChart from './Chart.jsx';
-import { IncomeBar, OverviewView, HouseholdView, PropertyView, TopUpsView, ConfidenceView } from './Modules.jsx';
+import { IncomeBar, OverviewView, HouseholdView, PropertyView, TopUpsView, ConfidenceView, HealthcareView, DrawdownView, SolveView } from './Modules.jsx';
 import { money, pct, Help, MoneyField, Choice, Slider } from './ui.jsx';
 import { CompareView, WorkspaceDetails, Assumptions, ReportView, UpgradeCode, PreviewSwitch } from './Workspace.jsx';
 import { ClientsView, MeetingView } from './Adviser.jsx';
@@ -337,14 +337,14 @@ const ICONS = {
   compare: 'M4 5h6v14H4zM14 5h6v14h-6z', profile: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0',
 };
 // Workspace and Adviser: a household dashboard with planning modules.
-const WORK_NAV = [['overview', 'Overview'], ['household', 'Household'], ['property', 'Property'], ['topups', 'Top-ups and tax'], ['confidence', 'Confidence'],
+const WORK_NAV = [['overview', 'Overview'], ['household', 'Household'], ['property', 'Property'], ['topups', 'Top-ups and tax'], ['healthcare', 'Healthcare'], ['drawdown', 'Drawdown'], ['solve', 'Find my answer'], ['confidence', 'Confidence'],
   ['moves', 'Moves'], ['compare', 'Compare'], ['details', 'Details'], ['profile', 'Profile']];
 const WORK_BAR = [['overview', 'Overview'], ['moves', 'Moves'], ['compare', 'Compare'], ['more', 'More']];
-const WORK_ONLY = ['overview', 'household', 'property', 'topups', 'confidence', 'more'];
+const WORK_ONLY = ['overview', 'household', 'property', 'topups', 'healthcare', 'drawdown', 'solve', 'confidence', 'more'];
 Object.assign(ICONS, {
   overview: ICONS.plan, household: 'M9 11a3 3 0 100-6 3 3 0 000 6zM17 11a3 3 0 100-6M3 20a6 6 0 0112 0M15 14a6 6 0 016 6',
   property: 'M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10', topups: 'M12 3v18M7 8h7a3 3 0 010 6H9a3 3 0 000 6h8',
-  confidence: 'M3 20h18M6 20v-5M10 20v-9M14 20V7M18 20v-7', more: 'M5 12h.01M12 12h.01M19 12h.01',
+  confidence: 'M3 20h18M6 20v-5M10 20v-9M14 20V7M18 20v-7', healthcare: 'M12 5v14M5 12h14M4 4h16v16H4z', drawdown: 'M12 3v12M7 10l5 5 5-5M4 21h16', solve: 'M11 18a7 7 0 100-14 7 7 0 000 14zM21 21l-5-5', more: 'M5 12h.01M12 12h.01M19 12h.01',
 });
 const EMPTY = { answers: DEFAULT_ANSWERS, tried: {}, done: false, scenarios: [] };
 
@@ -465,6 +465,9 @@ export default function GuidedApp() {
           {view === 'household' && <HouseholdView answers={answers} setAnswer={setAnswer} now={now} />}
           {view === 'property' && <PropertyView answers={answers} setAnswer={setAnswer} plan={plan} now={now} />}
           {view === 'topups' && <TopUpsView answers={calc} plan={plan} tried={tried} setTried={setTried} setAnswer={setAnswer} now={now} />}
+          {view === 'healthcare' && <HealthcareView answers={answers} setAnswer={setAnswer} plan={plan} />}
+          {view === 'drawdown' && <DrawdownView answers={answers} setAnswer={setAnswer} plan={plan} />}
+          {view === 'solve' && <SolveView answers={calc} plan={plan} setTried={setTried} go={setTab} now={now} />}
           {view === 'confidence' && <ConfidenceView answers={calc} plan={plan} now={now} />}
           {view === 'more' && <>
             <section className="lead compact"><p className="eyebrow">All sections</p><h1>Where to next?</h1></section>

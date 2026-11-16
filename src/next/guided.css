@@ -256,7 +256,7 @@ table.data tbody th { font-weight: 500; color: var(--ink-2); text-align: left; w
 .side-nav button svg { width: 18px; height: 18px; flex-shrink: 0; }
 .side-nav button:hover { background: var(--sunken); color: var(--ink); }
 .side-nav button.on { background: var(--brand-tint); color: var(--brand); font-weight: 600; }
-.side-nav button:nth-child(6) { margin-top: 12px; }
+.side-nav button:nth-child(9) { margin-top: 12px; }
 .tabs.work { display: none; }
 .app-header .wrap { max-width: 1240px; }
 .section-title { font-size: 18px; margin: 8px 0 12px; }
@@ -341,3 +341,11 @@ table.waterfall td { font-size: 16px; } table.waterfall tr.total th, table.water
   .report-head { flex-direction: column; align-items: flex-start; }
 }
 @media print { .meeting { display: none; } .report { border-top-width: 6px !important; border-top-style: solid !important; border-color: var(--report-accent) !important; } }
+
+.solve-actions { display: grid; gap: 8px; align-content: start; }
+@media (max-width: 760px) { .solve-actions { grid-column: 1 / -1; } }
+
+.main > *, .panel, .profile > *, .grid2 > *, .grid3 > * { min-width: 0; }
+.table-scroll { max-width: 100%; }
+.app > * { min-width: 0; }  /* flex children must be allowed to shrink, or a wide table stretches the page */
+.app > .wrap, .app > header, .app > footer { width: 100%; }

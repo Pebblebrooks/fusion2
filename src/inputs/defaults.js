@@ -104,7 +104,12 @@ export const DEFAULT_INPUTS = {
   propertyType: 'hdb_bto',        // 'hdb_bto' | 'hdb_resale' | 'private' | 'none' — gates leasehold auto-set + grant UI
   propertyAge:  0,                // age of property in years (HDB resale / private); auto-computes remaining lease
   loanType: 'hdb',               // 'hdb' | 'bank' | 'none' — informational; gates loan-type label
-  medicalUsage: 500, medishieldIP: 900, medishieldMode: 'manual', elderCareShield: 500,
+  // medishieldMode 'auto' = MediShield Life premium from the official age table (medishieldIP is then ignored);
+  // 'manual' = medishieldIP is the member's whole MediShield Life + Integrated Shield premium.
+  medicalUsage: 500, medishieldIP: 900, medishieldMode: 'auto', elderCareShield: 500,
+  ipPrivatePremium: 0,     // auto mode: private part of an Integrated Shield Plan; MediSave pays only up to the age limit
+  careShieldJoinAge: 0,    // 0 = from 30. Premiums run to 67, or for 10 years after joining if later
+  careShieldCatchUp: 0,    // flat catch-up component for 10 years (members born 1979 or earlier)
   medicalInflationRate: 5,
   propertyValue: 500000, propertyGrowthRate: 2, propertyLeasehold: false, propertyLeaseYears: 99,
   propertyGoalValue: 0,       // optional target property value at payout age (0 = no goal; shows % of net worth instead)
@@ -409,7 +414,7 @@ export const INPUT_LABELS = {
   housingOutflow: "Housing Outflow", oaEduLoan: "OA Education Loan", oaEduLoanFreq: "OA Edu Loan Freq",
   mortgagePaymentSource: "Mortgage Payment Source", propertyIntention: "Property Intention", monthlyRentExpense: "Monthly Rent Expense", propertyType: "Property Type", propertyAge: "Property Age (years)", loanType: "Loan Type",
   medicalUsage: "Medical Usage",
-  medishieldIP: "MediShield/IP", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
+  medishieldIP: "MediShield/IP", ipPrivatePremium: "IP private part", careShieldJoinAge: "CareShield join age", careShieldCatchUp: "CareShield catch-up", elderCareShield: "CareShield", medicalInflationRate: "Medical Infl. %",
   propertyValue: "Property Value", propertyGrowthRate: "Prop Growth %",
   propertyLeasehold: "Is Leasehold", propertyLeaseYears: "Lease Years",
   propertyGoalValue: "Property Goal Value",

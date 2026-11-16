@@ -50,6 +50,7 @@ export function CompareView({ tier, base, plan, answers, tried, changed, scenari
       'Plan as a household, with your partner’s CPF alongside yours',
       'See what selling or right-sizing your home would do, including the Silver Housing Bonus',
       'Compare CPF top-ups with SRS and the tax each saves',
+      'Plan healthcare costs and how to draw down your savings, and solve for the age you can stop work',
       'Run 500 simulations to see the range of outcomes',
       'Save up to four what-if scenarios and see them in one table',
       'Year-by-year balances you can download, and a report you can print',
@@ -63,8 +64,8 @@ export function CompareView({ tier, base, plan, answers, tried, changed, scenari
   const rows = [
     ['Monthly income', (s) => money(s.incomeToday), (s) => s.incomeToday],
     ['CPF LIFE, for life', (s) => money(s.payoutToday), (s) => s.payoutToday],
-    ['Ordinary Account, to 90', (s) => money(s.oaMonthlyToday), (s) => s.oaMonthlyToday],
-    ...(cols.some((c) => c.s.otherMonthlyToday > 0) ? [['Cash from home sale, to 90', (s) => money(s.otherMonthlyToday), (s) => s.otherMonthlyToday]] : []),
+    [`Ordinary Account, to ${cols[0].s.spreadTo}`, (s) => money(s.oaMonthlyToday), (s) => s.oaMonthlyToday],
+    ...(cols.some((c) => c.s.otherMonthlyToday > 0) ? [[`From home sale, to ${cols[0].s.spreadTo}`, (s) => money(s.otherMonthlyToday), (s) => s.otherMonthlyToday]] : []),
     ['Gap to your target', (s) => (s.gapToday > 0 ? money(s.gapToday) : 'None'), null],
     ['Payouts start at', (s) => `${s.payoutAge}`, null],
     ['Full Retirement Sum at 55', (s) => pct(s.frsCoverage), null],
@@ -275,8 +276,8 @@ export function ReportView({ plan, base, answers, scenarios, now, tier, client, 
 
         <h2>The answer</h2>
         <p className="report-lead">{started ? 'CPF LIFE' : `From age ${plan.payoutAge}, CPF LIFE`} is estimated to pay about <b>{money(plan.payoutToday)} a month for life</b>, in today&rsquo;s dollars{started ? '' : ` (${money(plan.payout)} a month in ${plan.yearPayout})`}.
-          {plan.oaMonthlyToday > 0 && <> Ordinary Account savings could add {money(plan.oaMonthlyToday)} a month if spread to age 90; this part is not guaranteed for life.</>}
-          {plan.otherMonthlyToday > 0 && <> The home sale could add {money(plan.otherMonthlyToday)} a month if spread to age 90.</>}
+          {plan.oaMonthlyToday > 0 && <> Ordinary Account savings could add {money(plan.oaMonthlyToday)} a month if spread to age {plan.spreadTo}; this part is not guaranteed for life.</>}
+          {plan.otherMonthlyToday > 0 && <> The home sale could add {money(plan.otherMonthlyToday)} a month if spread to age {plan.spreadTo}.</>}
           {!joint && plan.target > 0 && (plan.gapToday > 0 ? <> Against a target of {money(plan.target)} a month, the gap is <b>{money(plan.gapToday)} a month</b>.</> : <> This meets the target of {money(plan.target)} a month.</>)}</p>
         <table className="data">
           <tbody>

@@ -9,7 +9,7 @@
  */
 import { useMemo, useState } from 'react';
 import { buildPlan, ageFrom, taxSavedByRelief, RSTU_RELIEF_CAP } from '../model/plan.js';
-import { buildHousehold, compareTopUps, runConfidence } from '../model/household.js';
+import { buildHousehold, compareTopUps, runConfidence, healthcare, drawdown, solveStopWork, solveTopUp } from '../model/household.js';
 import { SHB, SRS_CAP_SC_PR } from '../policy/cpf2026.js';
 import { money, pct, Help, MoneyField, Choice, Slider } from './ui.jsx';
 
@@ -32,8 +32,8 @@ export function IncomeBar({ p }) {
       </div>
       <ul className="bar-key">
         <li><i className="sw life" /><span><b>{money(p.payoutToday)}</b> CPF LIFE <em>for life</em></span></li>
-        {p.oaMonthlyToday > 0 && <li><i className="sw oa" /><span><b>{money(p.oaMonthlyToday)}</b> Ordinary Account <em>if spread to age 90</em></span></li>}
-        {other > 0 && <li><i className="sw other" /><span><b>{money(other)}</b> From your home sale <em>if spread to age 90</em></span></li>}
+        {p.oaMonthlyToday > 0 && <li><i className="sw oa" /><span><b>{money(p.oaMonthlyToday)}</b> Ordinary Account <em>if spread to age {p.spreadTo || 90}</em></span></li>}
+        {other > 0 && <li><i className="sw other" /><span><b>{money(other)}</b> From your home sale <em>if spread to age {p.spreadTo || 90}</em></span></li>}
         {p.gapToday > 0 && <li><i className="sw gap" /><span><b>{money(p.gapToday)}</b> gap <em>from other savings</em></span></li>}
       </ul>
     </div>
@@ -46,7 +46,7 @@ export function OverviewView({ answers, plan, moves, changed, onReset, scenarios
   const joint = !!hh.partner;
   const bar = {
     payoutToday: hh.lifeToday, oaMonthlyToday: plan.oaMonthlyToday + (joint ? hh.partner.oaMonthlyToday : 0),
-    otherMonthlyToday: plan.otherMonthlyToday, gapToday: hh.gapToday, target: hh.target, incomeToday: hh.incomeToday,
+    otherMonthlyToday: plan.otherMonthlyToday, gapToday: hh.gapToday, target: hh.target, incomeToday: hh.incomeToday, spreadTo: plan.spreadTo,
   };
   const enough = hh.target > 0 && hh.gapToday === 0;
   // With a partner, the income part of readiness is measured for the household.
@@ -61,6 +61,10 @@ export function OverviewView({ answers, plan, moves, changed, onReset, scenarios
       line: plan.sale ? (plan.sale.shortfall ? `Selling at ${plan.sale.age} would not cover the next home.` : `left after selling at ${plan.sale.age} and buying your next home, in today’s dollars`) : answers.ownsHome ? 'home value today. See what selling would do.' : 'Add your home to see what selling or right-sizing would do.', cta: answers.ownsHome ? 'Open' : 'Add home' },
     { id: 'topups', title: 'Top-ups and tax', fig: taxAt8k > 0 ? money(taxAt8k) : null,
       line: taxAt8k > 0 ? 'a year in tax you could save with a S$8,000 top-up' : 'Compare CPF top-ups and SRS for spare cash.', cta: 'Compare' },
+    { id: 'healthcare', title: 'Healthcare', fig: pct(plan.maCoverage), line: 'of the Basic Healthcare Sum in MediSave at 65. See premiums and cash needed.', cta: 'Open' },
+    { id: 'drawdown', title: 'Drawdown', fig: plan.oaMonthlyToday > 0 ? money(plan.oaMonthlyToday) : null,
+      line: plan.oaMonthlyToday > 0 ? `a month from your Ordinary Account to age ${plan.spreadTo}. Change the pace or leave some for family.` : 'Plan withdrawals and what to leave for family.', cta: 'Open' },
+    { id: 'solve', title: 'Find my answer', fig: null, line: 'Earliest age you can stop work, and the top-up that closes your gap.', cta: 'Solve' },
     { id: 'confidence', title: 'Confidence', fig: null, line: 'See the range of outcomes across 500 simulated futures.', cta: 'Run' },
     { id: 'moves', title: 'Next moves', fig: moves[0] ? `+${money(moves[0].gain)}` : null,
       line: moves[0] ? `a month: ${moves[0].title.charAt(0).toLowerCase()}${moves[0].title.slice(1)}` : 'Try the levers yourself.', cta: 'Open' },
@@ -242,8 +246,8 @@ export function PropertyView({ answers, setAnswer, plan, now }) {
           <p className="small muted">Figures in {s.year} dollars. You must return {money(s.refund)} to your CPF (what you used plus 2.5% a year interest){s.refund > s.inCpf && s.resources >= 0 ? `; ${money(s.refund - s.inCpf)} of it goes towards the next home` : ''}.{s.resources < 0 ? ' You would need other savings or a cheaper next home.' : ''}{s.shb && s.committed < a.shbCommit ? ` Only ${money(s.committed)} can be committed: the Retirement Account cannot go above the current Full Retirement Sum this way.` : ''} Selling costs and stamp duty are not included.</p>
           {keep && <ul className="delta-list">
             <li><span>CPF LIFE, for life</span><b>{signed(plan.payoutToday - keep.payoutToday)}</b></li>
-            <li><span>Ordinary Account, to 90</span><b>{signed(plan.oaMonthlyToday - keep.oaMonthlyToday)}</b></li>
-            <li><span>From the sale, spread to 90</span><b>{signed(plan.otherMonthlyToday)}</b></li>
+            <li><span>Ordinary Account, to {plan.spreadTo}</span><b>{signed(plan.oaMonthlyToday - keep.oaMonthlyToday)}</b></li>
+            <li><span>From the sale, spread to {plan.spreadTo}</span><b>{signed(plan.otherMonthlyToday)}</b></li>
             <li className="total"><span>Monthly income, today&rsquo;s dollars</span><b>{signed(plan.incomeToday - keep.incomeToday)}</b></li>
           </ul>}
         </section>}
@@ -354,6 +358,151 @@ export function ConfidenceView({ answers, plan, now }) {
           <p className="small muted">Monthly income in today&rsquo;s dollars. The same plan always gives the same range. This tests interest rates only; your pay, health and property prices can also change. {answers.hasPartner ? 'Figures are for you, not your household.' : ''}</p>
         </section>
       </>}
+    </>
+  );
+}
+
+/* ── Healthcare ───────────────────────────────────────────────────────────── */
+export function HealthcareView({ answers, setAnswer, plan }) {
+  const h = useMemo(() => healthcare(plan), [plan]);
+  const a = answers, older = a.birthYear <= 1979;
+  return (
+    <>
+      <section className="lead compact">
+        <p className="eyebrow">Healthcare</p>
+        <h1>{h.runsOut ? <>Your MediSave would run out at <span className="fig">{h.runsOut}</span>.</> : 'Your MediSave covers your premiums and bills to 90.'}</h1>
+        <p className="muted">MediSave pays MediShield Life and CareShield Life premiums in full, and the private part of an Integrated Shield Plan up to a yearly limit. Anything else is cash. Figures are in today&rsquo;s dollars.</p>
+      </section>
+
+      <div className="grid3">
+        {h.maAt65Today !== null && <section className="panel kpi"><p className="eyebrow">MediSave at 65</p><p className="mod-fig fig">{money(h.maAt65Today)}</p><p className="small muted">{pct(h.maCoverage)} of the Basic Healthcare Sum</p></section>}
+        <section className="panel kpi"><p className="eyebrow">Cash needed to 90</p><p className="mod-fig fig">{money(h.cashToday)}</p><p className="small muted">{h.cashToday > 0 ? `starting at age ${h.cashFrom}` : 'MediSave covers everything entered'}</p></section>
+        <section className="panel kpi"><p className="eyebrow">MediSave lasts</p><p className="mod-fig fig">{h.runsOut ? `to ${h.runsOut}` : 'past 90'}</p><p className="small muted">with medical costs rising {a.medInflation}% a year</p></section>
+      </div>
+
+      <section className="panel">
+        <h2>Yearly cost at each age</h2>
+        <div className="table-scroll">
+          <table className="data">
+            <thead><tr><th scope="col">Age</th><th scope="col">MediShield Life premium</th><th scope="col">Paid from MediSave</th><th scope="col">Paid in cash</th><th scope="col">MediSave left</th></tr></thead>
+            <tbody>{h.points.map((p) => <tr key={p.age}><th scope="row">{p.age}</th><td>{money(p.msl)}</td><td>{money(p.fromMa)}</td><td>{p.cash > 0 ? money(p.cash) : '—'}</td><td>{money(p.ma)}</td></tr>)}</tbody>
+          </table>
+        </div>
+        <p className="small muted">MediShield Life premiums follow MOH&rsquo;s published table by age, before any subsidy. &ldquo;Paid from MediSave&rdquo; includes all premiums and bills MediSave pays that year.</p>
+      </section>
+
+      <div className="profile">
+        <section className="panel"><h2>Your cover</h2><div className="fields">
+          <MoneyField id="hc-ip" label="Integrated Shield Plan, private part" value={a.ipPrivate} onChange={(v) => setAnswer({ ipPrivate: v })} suffix="a year"
+            hint="The extra premium your insurer charges on top of MediShield Life, without riders. MediSave pays up to S$300 a year (to age 40), S$600 (41 to 70) or S$900 (71 on). Leave at 0 if you have MediShield Life only." />
+          <MoneyField id="hc-cs" label="CareShield Life premium" value={a.careShield} onChange={(v) => setAnswer({ careShield: v })} suffix="a year"
+            hint="See yours at cpf.gov.sg/cshlpremiums. Paid from MediSave from 30 to 67. Enter 0 if you are not covered." />
+          {older && <>
+            <Slider id="hc-join" label="Age you joined CareShield Life" value={a.careShieldJoinAge || 40} min={40} max={Math.max(40, plan.age)} step={1} onChange={(v) => setAnswer({ careShieldJoinAge: v })} format={(v) => `${v}`} />
+            <MoneyField id="hc-catch" label="Catch-up component" value={a.careShieldCatchUp} onChange={(v) => setAnswer({ careShieldCatchUp: v })} suffix="a year"
+              hint="A flat amount some members born in 1979 or earlier pay for 10 years. Premiums run to 67, or for 10 years after joining if that is later." />
+          </>}
+        </div></section>
+        <section className="panel"><h2>Your costs</h2><div className="fields">
+          <MoneyField id="hc-use" label="Medical bills paid from MediSave" value={a.medUsage} onChange={(v) => setAnswer({ medUsage: v })} suffix="a year" hint="Clinic visits, scans and hospital bills that MediSave pays for." />
+          <Slider id="hc-infl" label="Medical costs rise each year by" value={a.medInflation} min={0} max={8} step={0.5} onChange={(v) => setAnswer({ medInflation: v })} format={(v) => `${v}%`} />
+          <p className="field-hint">This is applied to premiums and bills alike, and is the biggest driver of the figures above. General prices are assumed to rise {plan.assumptions.inflation * 100}% a year.</p>
+        </div></section>
+      </div>
+    </>
+  );
+}
+
+/* ── Drawdown ─────────────────────────────────────────────────────────────── */
+export function DrawdownView({ answers, setAnswer, plan }) {
+  const d = useMemo(() => drawdown(plan), [plan]);
+  const a = answers, before55 = plan.age < 55;
+  return (
+    <>
+      <section className="lead compact">
+        <p className="eyebrow">Drawdown</p>
+        <h1>Your Ordinary Account gives about <span className="fig">{money(d.monthly)}</span> a month from {d.from} to {d.spreadTo}.</h1>
+        <p className="muted">CPF LIFE pays for life whatever you do here. This screen is about the savings you control: how fast to spend them and how much to leave. Today&rsquo;s dollars.</p>
+      </section>
+
+      <div className="profile">
+        <section className="panel"><h2>Pace</h2><div className="fields">
+          <Slider id="dd-to" label="Spend Ordinary Account savings evenly until" value={plan.spreadTo} min={Math.max(75, d.from + 5)} max={100} step={1} onChange={(v) => setAnswer({ oaSpreadTo: v })} format={(v) => `age ${v}`} />
+          <MoneyField id="dd-keep" label="Leave untouched for family or emergencies" value={a.oaKeep} onChange={(v) => setAnswer({ oaKeep: v })} suffix="today's dollars" />
+          <p className="field-hint">You will have about {money(d.startToday)} in your Ordinary Account at {d.from}. Money left in it keeps earning 2.5% a year.</p>
+        </div></section>
+
+        {before55 && <section className="panel"><h2>At 55</h2><div className="fields">
+          <MoneyField id="dd-55" label="Cash to take out at 55" value={a.withdrawAt55} onChange={(v) => setAnswer({ withdrawAt55: v })} suffix="today's dollars"
+            hint={d.maxAt55Today !== null ? `From 55 you can take the first S$5,000, or everything above your Full Retirement Sum if that is more. On this plan that is about ${money(d.maxAt55Today)}. Anything above what CPF allows is ignored.` : null} />
+          <p className="field-hint">What you take out stops earning CPF interest and lowers the income above.</p>
+        </div></section>}
+      </div>
+
+      <section className="panel">
+        <h2>What would be left for family</h2>
+        <div className="table-scroll">
+          <table className="data">
+            <thead><tr><th scope="col">If you die at</th><th scope="col">Ordinary Account</th><th scope="col">CPF LIFE premium not yet paid out</th><th scope="col">Together</th></tr></thead>
+            <tbody>{d.left.map((l) => <tr key={l.age}><th scope="row">{l.age}</th><td>{money(l.oa)}</td><td>{l.life === null ? 'Not estimated' : money(l.life)}</td><td>{money(l.oa + (l.life || 0))}</td></tr>)}</tbody>
+          </table>
+        </div>
+        <p className="small muted">CPF pays beneficiaries any CPF LIFE premium not yet paid out as monthly payouts, without interest, together with remaining CPF savings. {d.basic ? 'On the Basic plan more is usually left; it is not estimated here. ' : ''}MediSave and any Retirement Account savings outside CPF LIFE are not included. Money goes to the people named in your CPF nomination.</p>
+      </section>
+    </>
+  );
+}
+
+/* ── Find my answer (solvers) ─────────────────────────────────────────────── */
+export function SolveView({ answers, plan, setTried, go, now }) {
+  const [stop, setStop] = useState(null), [top, setTop] = useState(null);
+  const key = JSON.stringify(plan.answers);
+  const s = stop && stop.key === key ? stop.r : null, t = top && top.key === key ? top.r : null;
+  const target = answers.targetIncome;
+  const why = (r) => (r.reason === 'no-target' ? 'Set a monthly income target under Profile first.'
+    : r.reason === 'not-working' ? 'This applies only while you are working.'
+      : `Not reachable this way: the most it gives is ${money(r.best)} a month against your target of ${money(r.target)}.`);
+  return (
+    <>
+      <section className="lead compact">
+        <p className="eyebrow">Find my answer</p>
+        <h1>Start from the goal and work backwards.</h1>
+        <p className="muted">Each answer re-runs your plan many times to find the point where your {answers.hasPartner ? 'household ' : ''}income first reaches {target > 0 ? `${money(target)} a month` : 'your target'}. Everything else in your plan stays as it is.</p>
+      </section>
+
+      <ol className="moves">
+        <li className="panel move">
+          <span className="rank" aria-hidden="true">1</span>
+          <div className="move-body">
+            <h2>What is the earliest age I can stop work?</h2>
+            {!s && <p className="muted">You plan to work until {answers.stopWorkAge}.</p>}
+            {s && (s.possible ? <>
+              <p className="gain-line"><b className="gain">Age {s.age}</b><span className="muted"> · income {money(s.incomeToday)} a month</span></p>
+              <p>{s.age < s.current ? `That is ${s.current - s.age} year${s.current - s.age === 1 ? '' : 's'} earlier than you planned.` : s.age === s.current ? 'That is the age you already plan to stop.' : `That is ${s.age - s.current} year${s.age - s.current === 1 ? '' : 's'} later than you planned.`} CPF LIFE still starts at {plan.payoutAge}; you would need other money to live on until then.</p>
+            </> : <p>{why(s)}</p>)}
+          </div>
+          <div className="solve-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setStop({ key, r: solveStopWork(plan.answers, now) })}>{s ? 'Solve again' : 'Solve'}</button>
+            {s?.possible && s.age !== s.current && <button type="button" className="btn btn-secondary" onClick={() => { setTried((x) => ({ ...x, stopWorkAge: s.age })); go('overview'); }}>Try in my plan</button>}
+          </div>
+        </li>
+        <li className="panel move">
+          <span className="rank" aria-hidden="true">2</span>
+          <div className="move-body">
+            <h2>How much must I top up each year?</h2>
+            {!t && <p className="muted">Cash top-ups to your {plan.age < 55 ? 'Special' : 'Retirement'} Account, every year until you stop work.</p>}
+            {t && (t.possible ? (t.amount === 0 ? <p>None. Your plan already meets your target.</p> : <>
+              <p className="gain-line"><b className="gain">{money(t.amount)} a year</b><span className="muted"> · income {money(t.incomeToday)} a month</span></p>
+              <p>{t.taxSaved > 0 ? `It would also save about ${money(t.taxSaved)} a year in tax. ` : ''}{t.turnedAway ? 'In later years CPF would not accept all of it, because your account reaches its limit; that part is left out.' : ''} Top-ups cannot be withdrawn.</p>
+            </>) : <p>{why(t)}</p>)}
+          </div>
+          <div className="solve-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setTop({ key, r: solveTopUp(plan.answers, now) })}>{t ? 'Solve again' : 'Solve'}</button>
+            {t?.possible && t.amount > 0 && <button type="button" className="btn btn-secondary" onClick={() => { setTried((x) => ({ ...x, topUpYearly: t.amount })); go('overview'); }}>Try in my plan</button>}
+          </div>
+        </li>
+      </ol>
+      {(stop && !s) || (top && !t) ? <p className="field-hint">Your plan has changed since an answer was worked out. Solve again for current figures.</p> : null}
     </>
   );
 }

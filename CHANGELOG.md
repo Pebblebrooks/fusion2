@@ -6,6 +6,20 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.2.0 — 16 Nov 2026
+- **Healthcare (Workspace):** MediShield Life by age, Integrated Shield private part, CareShield Life and medical bills; MediSave at 65, the age it runs out and the cash needed.
+- **Drawdown (Workspace):** how fast to spend the Ordinary Account, an amount to keep back, cash to take at 55, and what would be left for family at 75 to 95.
+- **Find my answer (Workspace):** earliest age to stop work, and the yearly top-up needed, to meet the income target.
+- **Review all clients (Adviser):** every plan re-run under current rules and set against the last issued report; flags crossed targets, moves over 5% and reports issued under older rules; CSV download. Advice-record entries now carry a rules version.
+
+Engine corrections, each approved by the owner (see the compliance register):
+- Integrated Shield Plan: MediSave pays the private part only up to MOH's limit for the age ($300 to 40, $600 from 41 to 70, $900 from 71); the rest is reported as cash.
+- CareShield Life: premiums stop after 67, or after 10 years for those who join at 59 or later; optional flat catch-up component for 10 years; base premium flat after 67.
+- MediShield Life: the official premium for each age (by age next birthday) is used by default. The classic planner's Manual mode remains, and now follows the same MediSave limits.
+- At 55: the first S$5,000 can be withdrawn even when the Ordinary Account alone holds less than that.
+- MediSave is never drawn below zero; costs it cannot cover are reported as cash needed.
+- All recorded test profiles were regenerated: MediSave balances change, mainly after 65.
+
 ## 3.1.0 — 16 Nov 2026
 Adviser tools. Guided, Workspace and the engine are unchanged.
 - **Client book:** Adviser opens on the client list. Each client shows monthly income against target, readiness, tags and next review date, with search, tag filter, sorting and a flag on overdue reviews. "My plan" is kept as an entry in the list.

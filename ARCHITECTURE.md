@@ -110,6 +110,7 @@ sent by the browser.
 | `src/model/household.js` | Pure models for the modules: `buildHousehold`, `compareTopUps`, `runConfidence` (seeded Monte Carlo). Property sale lives in `buildPlan` (`plan.sale`). |
 | `src/next/Adviser.jsx` | Adviser: client book (`ClientsView`) and meeting mode (`MeetingView`). |
 | `src/model/clients.js` | Pure client-book data handling: `cleanBook` (every load and restore passes through it), review status, search and sort, advice record. Tested in `tests/clients.test.js`. |
+| `src/engine/medical.js` | Yearly medical costs and MediSave limits, shared by both engines (`medicalYear`, `ipWithdrawalLimit`, `careShieldAges`). |
 | `src/next/ui.jsx` | Shared form controls and money/percent formatting. |
 | `src/next/Chart.jsx` | Savings chart (hand-drawn SVG, hover values, table view). |
 | `src/next/storage.js` | Saved plan (`fusion_guided_plan_v1`), access tier, theme, link into the classic planner. |

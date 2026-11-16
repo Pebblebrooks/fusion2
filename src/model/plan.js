@@ -56,6 +56,17 @@ export const DEFAULT_ANSWERS = {
   shb: false, shbNextFlat: '3r', shbCommit: 60000, // Silver Housing Bonus
   // Top-ups and tax
   srsYearly: 0, srsReturn: 3,
+  // Healthcare (yearly, today's dollars). MediShield Life premiums come from the official age table.
+  medUsage: 500,           // medical bills paid from MediSave
+  ipPrivate: 0,            // private part of an Integrated Shield Plan
+  careShield: 500,         // CareShield Life base premium (0 if not covered)
+  careShieldJoinAge: 0,    // 0 = from 30; set for members born 1979 or earlier who joined later
+  careShieldCatchUp: 0,    // flat catch-up component for 10 years
+  medInflation: 5,         // % a year
+  // Drawdown
+  withdrawAt55: 0,         // cash taken out at 55, today's dollars
+  oaSpreadTo: 90,          // spend Ordinary Account savings evenly to this age
+  oaKeep: 0,               // Ordinary Account savings to leave untouched, today's dollars
 };
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -104,6 +115,13 @@ export const toEngineInputs = (answers, now = new Date()) => {
     contributionStopAge: clamp(num(a.stopWorkAge, 65), age, 95),
     vcSaTopup: num(a.topUpYearly), oaToSaTransfer: age < 55 ? num(a.oaToSaYearly) : 0,
     ...propertyInputs(a, age, pr),
+    // Healthcare
+    medishieldMode: 'auto', medicalUsage: num(a.medUsage, 500), ipPrivatePremium: num(a.ipPrivate),
+    elderCareShield: num(a.careShield, 500), careShieldJoinAge: num(a.careShieldJoinAge), careShieldCatchUp: num(a.careShieldCatchUp),
+    medicalInflationRate: clamp(num(a.medInflation, 5), 0, 10),
+    // Withdrawal at 55 is entered in today's dollars. The engine limits it to what CPF allows.
+    oaWithdrawalAt55: age < 55 ? Math.round(num(a.withdrawAt55) * Math.pow(1 + clamp(num(a.inflation, 2), 0, 6) / 100, 55 - age)) : 0,
+    oaWithdrawalFreq: 'one-time',
   };
 };
 
@@ -159,10 +177,12 @@ export const buildPlan = (answers, now = new Date(), engineOptions = null) => {
   // Ordinary Account savings at payout age, spread evenly to age 90 (they keep earning 2.5%).
   // CPF LIFE is for life; this part is not, so the screens always show the two separately.
   const oaAtPayoutToday = Math.round(toToday(byAge.get(Math.max(pa, age) - 1)?.oa ?? num(a.oa), Math.max(pa, age)));
-  const months = Math.max(12, (OA_SPREAD_TO_AGE - Math.max(pa, age)) * 12);
+  const spreadTo = clamp(num(a.oaSpreadTo, OA_SPREAD_TO_AGE), Math.max(pa, age) + 1, 100);
+  const oaKeepToday = Math.min(oaAtPayoutToday, Math.max(0, num(a.oaKeep)));
+  const months = Math.max(12, (spreadTo - Math.max(pa, age)) * 12);
   const realMonthly = Math.pow((1 + CPF_RATES.OA) / (1 + infl), 1 / 12) - 1;
-  const oaMonthlyRaw = Math.round(Math.abs(realMonthly) < 1e-9 ? oaAtPayoutToday / months
-    : (oaAtPayoutToday * realMonthly) / (1 - Math.pow(1 + realMonthly, -months)));
+  const oaMonthlyRaw = Math.round(Math.abs(realMonthly) < 1e-9 ? (oaAtPayoutToday - oaKeepToday) / months
+    : ((oaAtPayoutToday - oaKeepToday) * realMonthly) / (1 - Math.pow(1 + realMonthly, -months)));
 
   // ── Selling the home (Workspace): CPF refund, cash released, Silver Housing Bonus ──
   let sale = null;
@@ -197,7 +217,7 @@ export const buildPlan = (answers, now = new Date(), engineOptions = null) => {
   // assuming it only keeps pace with prices. Shown as its own part of income. A negative amount
   // (next home partly paid from the CPF refund) is taken off the Ordinary Account part instead.
   const saleFrom = sale ? Math.max(sale.age, pa, age) : 0;
-  const saleMonthly = sale ? sale.poolToday / Math.max(12, (OA_SPREAD_TO_AGE - saleFrom) * 12) : 0;
+  const saleMonthly = sale ? sale.poolToday / Math.max(12, (spreadTo - saleFrom) * 12) : 0;
   const oaMonthlyToday = Math.max(0, Math.round(oaMonthlyRaw + Math.min(0, saleMonthly)));
   const otherMonthlyToday = Math.max(0, Math.round(saleMonthly));
   const incomeToday = payoutToday + oaMonthlyToday + otherMonthlyToday;
@@ -251,7 +271,7 @@ export const buildPlan = (answers, now = new Date(), engineOptions = null) => {
 
   return {
     answers: a, inputs, rows, age, year, payoutAge: pa, year55, yearPayout: a.birthYear + pa,
-    raAtPayout, payouts, payout, payoutToday, oaAtPayoutToday, oaMonthlyToday, otherMonthlyToday, sale, incomeToday, target, coverage, gapToday,
+    raAtPayout, payouts, payout, payoutToday, oaAtPayoutToday, oaMonthlyToday, otherMonthlyToday, sale, incomeToday, spreadTo, oaKeepToday, target, coverage, gapToday,
     frs55, raAt55, frsCoverage, maCoverage, bhs65,
     totalNow: num(a.oa) + num(a.sa) + num(a.ma),
     score, label, parts, watch, series,
@@ -347,7 +367,7 @@ export const findMoves = (answers, now = new Date(), limit = 3) => {
 export const summarise = (plan) => ({
   incomeToday: plan.incomeToday, payoutToday: plan.payoutToday, oaMonthlyToday: plan.oaMonthlyToday, otherMonthlyToday: plan.otherMonthlyToday,
   gapToday: plan.gapToday, coverage: plan.coverage, frsCoverage: plan.frsCoverage, score: plan.score, label: plan.label,
-  payoutAge: plan.payoutAge, payout: plan.payout,
+  payoutAge: plan.payoutAge, payout: plan.payout, spreadTo: plan.spreadTo,
 });
 
 /**

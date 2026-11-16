@@ -4,6 +4,7 @@
  */
 import { _cpfEngineInit, balaRatio, makeComputeGF } from './common.js';
 import { ANNUAL_LIMIT, CPF_RATES, MMSS_PILOT_END_YEAR, MMSS_PILOT_START_YEAR, RETIREMENT_SUMS_2026, projectedSum, getDpsPremiumForAge, getPRRates, scAllocBand, scEmployeeRate, silverHousingBonus, SHB, cohortFRS } from '../policy/cpf2026.js';
+import { medicalYear } from './medical.js';
 
 // ── BUG-5 fix: runProjectionWithDWZ ─────────────────────────────────────────
 // Shared Die-with-Zero multi-pass wrapper — extracts the DWZ logic that was
@@ -229,8 +230,6 @@ export function runProjectionEngine(inputs, {
   const baseHousing = overrideHousingOutflow !== undefined ? overrideHousingOutflow : (Number(inputs.housingOutflow) || 0);
   const oaEduLoanAnnual = Number(inputs.oaEduLoan) || 0;  // D1: OA Education Loan Scheme outflow
   const oaEduLoanFreq   = inputs.oaEduLoanFreq || 'one-time';
-  const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0);
-  const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
   // Housing grants + insurance — declared here so engine loop can reference them
   // Housing grants — same property-type gating as RSS engine (see _totalHousingGrants for detail).
   const _pTypePE = inputs.propertyType || 'hdb_bto';
@@ -241,7 +240,6 @@ export function runProjectionEngine(inputs, {
   ) : 0;
   const _dpsModePE = inputs.dpsMode || 'auto'; // "auto"|"optout"|"custom"
   const _hpsAnnualPE = Number(inputs.hpsAnnualPremium) || 0;
-  const medInfl = (Number(inputs.medicalInflationRate) || 0) / 100;
   const isSEP = inputs.isSelfEmployed === true;
   const isLeasehold = inputs.propertyLeasehold === true;
   const totalLease = Math.max(1, Number(inputs.propertyLeaseYears) || 99);
@@ -432,7 +430,7 @@ export function runProjectionEngine(inputs, {
     let yearSaRaInterest = 0;
     let yearMaInterest = 0;
     let yearHousingOut = 0;
-    let yearMedOut = 0;
+    let yearMedOut = 0, yearMedCash = 0, yearMsl = 0; // MediSave paid; cash needed; MediShield Life premium
     let yearOaDrawOut = 0;
     let yearLovedOneOut = 0; // OA→MA/SA for loved one (true outflow)
     // Rev #D2: life event flow trackers (reset each year)
@@ -606,7 +604,12 @@ export function runProjectionEngine(inputs, {
         }
       } else {
         if (age === 55 && !withdrawalApplied) {
-          const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor));
+          let actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor));
+          // CPF Board: the first $5,000 can be withdrawn from 55 even when savings are below the
+          // Full Retirement Sum. The engine has already moved those savings to the RA, so take the
+          // rest of the $5,000 back out of it.
+          const fromRa55 = Math.min(Math.max(0, Math.min(oaWithdrawalAt55, 5000) - actualW55), ra);
+          if (fromRa55 > 0) { ra -= fromRa55; oa += fromRa55; actualW55 += fromRa55; }
           oa            -= actualW55;
           yearOaDrawOut += actualW55;
           totalOutSpent += actualW55;
@@ -1318,11 +1321,13 @@ export function runProjectionEngine(inputs, {
       currentPropValue = 0;
       refundApplied = true;
     }
-    // Medical outflow — CareShield Life (elderCareShieldAmt) only begins at age 30 per MOH policy
+    // Medical outflow: premiums and bills, with MediSave limits (see src/engine/medical.js)
     const yrSince = Math.max(0, age - startAge);
-    const totalMaOut = Math.round((baseMedical + (age >= 30 ? elderCareShieldAmt : 0)) * Math.pow(1 + medInfl, yrSince));
+    const med = medicalYear(inputs, age, yrSince, ma);
+    const totalMaOut = med.fromMa;
     ma = Math.max(0, ma - totalMaOut);
     yearMedOut = totalMaOut;
+    yearMedCash = med.cash; yearMsl = med.msl;
     const yearTotalOut = activeHousing + totalMaOut;
     totalOutSpent += yearTotalOut;
 
@@ -1563,6 +1568,7 @@ export function runProjectionEngine(inputs, {
       yearOaInterest, yearSaRaInterest, yearMaInterest,
       yearHousingOut: Math.round(yearHousingOut),
       yearMedOut: Math.round(yearMedOut),
+      medCash: Math.round(yearMedCash), mslPremium: Math.round(yearMsl),
       yearOaDrawOut: Math.round(yearOaDrawOut),
       yearLovedOneOut: Math.round(yearLovedOneOut),
       yearCpfisOut: Math.round(yearCpfisOut),

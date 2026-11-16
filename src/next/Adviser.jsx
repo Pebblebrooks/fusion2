@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { buildHousehold } from '../model/household.js';
-import { cleanBook, cleanTags, clientSummary, reviewStatus, allTags, listClients, MAX_LOGO_CHARS, DEFAULT_ACCENT } from '../model/clients.js';
+import { cleanBook, cleanTags, clientSummary, reviewStatus, allTags, listClients, reviewAll, reviewCsv, RULES_VERSION, MAX_LOGO_CHARS, DEFAULT_ACCENT } from '../model/clients.js';
 import { download } from './storage.js';
 import { money, pct } from './ui.jsx';
 import { IncomeBar } from './Modules.jsx';
@@ -18,7 +18,7 @@ const niceDate = (iso) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLoca
 /* ── Client book ──────────────────────────────────────────────────────────── */
 export function ClientsView({ book, setBook, clientId, saved, onOpen, onAdd, onMeeting, onDeleted, now }) {
   const [name, setName] = useState(''), [query, setQuery] = useState(''), [tag, setTag] = useState(''), [sort, setSort] = useState('review');
-  const [editing, setEditing] = useState(null), [msg, setMsg] = useState(null);
+  const [editing, setEditing] = useState(null), [msg, setMsg] = useState(null), [review, setReview] = useState(null);
   const tags = useMemo(() => allTags(book.clients), [book.clients]);
   const rows = useMemo(() => listClients(book.clients, { query, tag, sort }), [book.clients, query, tag, sort]);
   const summaries = useMemo(() => Object.fromEntries(book.clients.map((c) => [c.id, clientSummary(c, now)])), [book.clients, now]);
@@ -109,7 +109,7 @@ export function ClientsView({ book, setBook, clientId, saved, onOpen, onAdd, onM
                   <button type="button" className="link danger" onClick={() => remove(c)}>Delete this client</button>
                   {c.log.length > 0 && <div className="log">
                     <p className="field-label">Advice record</p>
-                    <ol>{c.log.map((e) => <li key={e.at}><b>{niceDate(e.at)}</b> · {money(e.income)} a month{e.target > 0 ? ` against ${money(e.target)}` : ''} · readiness {e.score}{e.recommendation ? <><br /><span className="muted">{e.recommendation}</span></> : null}</li>)}</ol>
+                    <ol>{c.log.map((e) => <li key={e.at}><b>{niceDate(e.at)}</b> · {money(e.income)} a month{e.target > 0 ? ` against ${money(e.target)}` : ''} · readiness {e.score} · rules {e.rules || 'before versioning'}{e.recommendation ? <><br /><span className="muted">{e.recommendation}</span></> : null}</li>)}</ol>
                   </div>}
                 </div>}
               </li>
@@ -122,6 +122,30 @@ export function ClientsView({ book, setBook, clientId, saved, onOpen, onAdd, onM
           </li>
         </ul>
       </section>
+
+      {book.clients.some((c) => c.state.done) && <section className="panel">
+        <div className="panel-head">
+          <h2>Review all clients</h2>
+          <div className="btn-row">
+            <button type="button" className="btn btn-secondary" onClick={() => setReview(reviewAll(book.clients, now))}>{review ? 'Run again' : 'Run review'}</button>
+            {review && <button type="button" className="btn btn-secondary" onClick={() => download(`fusion-client-review-${new Date().toISOString().slice(0, 10)}.csv`, reviewCsv(review), 'text/csv')}>Download CSV</button>}
+          </div>
+        </div>
+        <p className="muted">Re-runs every finished plan under the current rules (checked {RULES_VERSION}) and compares it with the figures in each client&rsquo;s last issued report.</p>
+        {review && <div className="table-scroll">
+          <table className="data">
+            <thead><tr><th scope="col">Client</th><th scope="col">Income now</th><th scope="col">In last report</th><th scope="col">Change</th><th scope="col">Status</th></tr></thead>
+            <tbody>{review.map((r) => (
+              <tr key={r.id}>
+                <th scope="row">{r.name}</th><td>{money(r.incomeToday)}</td>
+                <td>{r.lastIncome === null ? '—' : <>{money(r.lastIncome)}<small className="muted"> · {niceDate(r.lastAt)}</small></>}</td>
+                <td>{r.change === null ? '—' : `${r.change > 0 ? '+' : r.change < 0 ? '−' : ''}${money(Math.abs(r.change))}${r.pctChange !== null ? ` (${Math.abs(r.pctChange * 100).toFixed(1)}%)` : ''}`}</td>
+                <td><span className={`chip ${r.flag === 'crossed' ? 'review-overdue' : r.flag === 'moved' || r.flag === 'rules' ? 'review-soon' : ''}`}>{{ crossed: r.gapToday > 0 ? 'Now below target' : 'Now meets target', moved: 'Income moved over 5%', rules: 'Rules updated since report', none: 'No report issued', '': 'No change to act on' }[r.flag]}</span></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>}
+      </section>}
 
       <section className="panel">
         <h2>On your reports</h2>
@@ -154,7 +178,7 @@ export function ClientsView({ book, setBook, clientId, saved, onOpen, onAdd, onM
 export function MeetingView({ plan, moves, name, onExit, now }) {
   const hh = useMemo(() => buildHousehold(plan.answers, now), [plan.answers, now]);
   const joint = !!hh.partner, s = plan.sale;
-  const bar = { payoutToday: hh.lifeToday, oaMonthlyToday: plan.oaMonthlyToday + (joint ? hh.partner.oaMonthlyToday : 0), otherMonthlyToday: plan.otherMonthlyToday, gapToday: hh.gapToday, target: hh.target, incomeToday: hh.incomeToday };
+  const bar = { payoutToday: hh.lifeToday, oaMonthlyToday: plan.oaMonthlyToday + (joint ? hh.partner.oaMonthlyToday : 0), otherMonthlyToday: plan.otherMonthlyToday, gapToday: hh.gapToday, target: hh.target, incomeToday: hh.incomeToday, spreadTo: plan.spreadTo };
   const pages = [
     { key: 'answer', title: 'Where you stand', body: (<>
       <h1>{joint ? 'Together, CPF is set to pay you about ' : 'CPF is set to pay you about '}<span className="fig">{money(hh.incomeToday)}</span> a month.</h1>

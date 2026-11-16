@@ -190,3 +190,61 @@ test('confidence: seeded, ordered and centred on the plan', () => {
   const wide = runConfidence({ housingMonthly: 1200 }, NOW, { runs: 120, band: 1.5 });
   assert.ok(wide.income.p90 - wide.income.p10 > a.income.p90 - a.income.p10);
 });
+
+// ── Healthcare, drawdown and solvers (v3.2) ────────────────────────────────
+import { healthcare, drawdown, solveStopWork, solveTopUp } from '../src/model/household.js';
+import { reviewAll, reviewCsv, newClient, withLogEntry, clientPlan, RULES_VERSION } from '../src/model/clients.js';
+
+test('healthcare: a private plan above the MediSave limit shows up as cash, not as a MediSave withdrawal', () => {
+  const plain = healthcare(buildPlan({ medInflation: 0 }, NOW)), ip = healthcare(buildPlan({ medInflation: 0, ipPrivate: 1500 }, NOW));
+  assert.equal(plain.points[0].cash, 0);
+  assert.equal(ip.points[0].cash, 1200);                          // age 35: limit $300
+  assert.equal(ip.points[0].fromMa - plain.points[0].fromMa, 300);
+  assert.equal(plain.points[0].msl, 503);                         // next birthday 36
+  assert.ok(ip.cashToday > plain.cashToday);
+  const none = healthcare(buildPlan({ medInflation: 0, careShield: 0, medUsage: 0 }, NOW));
+  assert.equal(none.runsOut, null);
+});
+
+test('drawdown: spending faster raises income, and money kept back is still there later', () => {
+  const to90 = buildPlan({ housingMonthly: 1200 }, NOW), to80 = buildPlan({ housingMonthly: 1200, oaSpreadTo: 80 }, NOW);
+  assert.ok(to80.oaMonthlyToday > to90.oaMonthlyToday);
+  assert.equal(to80.payoutToday, to90.payoutToday, 'CPF LIFE is not affected');
+  const keep = buildPlan({ housingMonthly: 1200, oaKeep: 50000 }, NOW), d = drawdown(keep);
+  assert.ok(keep.oaMonthlyToday < to90.oaMonthlyToday);
+  assert.ok(d.left.find((l) => l.age === 95).oa >= 50000);
+  assert.ok(d.left[0].life > d.left[1].life, 'unused CPF LIFE premium falls as payouts are received');
+  assert.equal(drawdown(buildPlan({ lifePlan: 'bas' }, NOW)).left[0].life, null);
+  assert.ok(buildPlan({ housingMonthly: 1200, withdrawAt55: 20000 }, NOW).incomeToday < to90.incomeToday);
+});
+
+test('solvers: the answer meets the target and one step less does not', () => {
+  const a = { housingMonthly: 1200, targetIncome: 2500 };
+  const s = solveStopWork(a, NOW);
+  assert.equal(s.possible, true);
+  assert.ok(buildPlan({ ...a, stopWorkAge: s.age }, NOW).incomeToday >= 2500);
+  assert.ok(buildPlan({ ...a, stopWorkAge: s.age - 1 }, NOW).incomeToday < 2500);
+  const t = solveTopUp({ housingMonthly: 1200, targetIncome: 3500 }, NOW);
+  assert.equal(t.possible, true); assert.equal(t.amount % 500, 0);
+  assert.ok(buildPlan({ housingMonthly: 1200, targetIncome: 3500, topUpYearly: t.amount }, NOW).incomeToday >= 3500);
+  assert.ok(buildPlan({ housingMonthly: 1200, targetIncome: 3500, topUpYearly: t.amount - 500 }, NOW).incomeToday < 3500);
+  assert.equal(solveTopUp({ targetIncome: 20000 }, NOW).reason, 'out-of-reach');
+  assert.equal(solveTopUp({ targetIncome: 100 }, NOW).amount, 0);
+  assert.equal(solveStopWork({ targetIncome: 0 }, NOW).reason, 'no-target');
+  assert.equal(solveStopWork({ work: 'none', salary: 0, targetIncome: 1000 }, NOW).reason, 'not-working');
+});
+
+test('review all clients: flags a crossed target, a large move and older rules', () => {
+  const state = (extra) => ({ answers: { ...DEFAULT_ANSWERS, targetIncome: 2500, ...extra }, tried: {}, done: true, scenarios: [] });
+  const issue = (c) => withLogEntry(c, clientPlan(c, NOW), buildHousehold(c.state.answers, NOW), 'A', '2026-11-01T00:00:00.000Z');
+  const steady = issue({ ...newClient('1', 'Steady', ''), state: state({}) });
+  let crossed = issue({ ...newClient('2', 'Crossed', ''), state: state({}) }); crossed = { ...crossed, state: state({ targetIncome: 6000 }) };
+  let moved = issue({ ...newClient('3', 'Moved', ''), state: state({ targetIncome: 100 }) }); moved = { ...moved, state: state({ targetIncome: 100, salary: 12000 }) };
+  let oldRules = issue({ ...newClient('4', 'Old rules', ''), state: state({}) }); oldRules = { ...oldRules, log: [{ ...oldRules.log[0], rules: '' }] };
+  const fresh = { ...newClient('5', 'Fresh', ''), state: state({}) }, unfinished = newClient('6', 'Unfinished', '');
+  const rows = reviewAll([steady, crossed, moved, oldRules, fresh, unfinished], NOW);
+  assert.deepEqual(rows.map((r) => [r.name, r.flag]), [['Crossed', 'crossed'], ['Moved', 'moved'], ['Old rules', 'rules'], ['Fresh', 'none'], ['Steady', '']]);
+  assert.equal(steady.log[0].rules, RULES_VERSION);
+  assert.equal(rows.find((r) => r.name === 'Steady').change, 0);
+  assert.equal(reviewCsv(rows).split('\n').length, 6);
+});

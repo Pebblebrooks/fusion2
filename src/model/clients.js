@@ -10,6 +10,7 @@
  */
 import { DEFAULT_ANSWERS, buildPlan } from './plan.js';
 import { buildHousehold } from './household.js';
+import { RULES_VERSION } from '../policy/cpf2026.js';
 
 export const MAX_LOG = 50, MAX_TAGS = 6, MAX_LOGO_CHARS = 280000; // about 200 KB of image as a data URL
 export const DEFAULT_ACCENT = '#0F766E';
@@ -33,6 +34,7 @@ export const cleanTags = (tags) => [...new Set((Array.isArray(tags) ? tags : Str
 const cleanLog = (log) => (Array.isArray(log) ? log : []).filter((e) => e && typeof e.at === 'string').slice(0, MAX_LOG).map((e) => ({
   at: str(e.at, 30), income: Number(e.income) || 0, life: Number(e.life) || 0, target: Number(e.target) || 0, score: Number(e.score) || 0,
   recommendation: str(e.recommendation, 2000), basis: str(e.basis, 2000), by: str(e.by, 100),
+  rules: str(e.rules, 20), // rules version the figures were worked out under ('' = before versioning)
 }));
 
 export const cleanClient = (c) => ({
@@ -98,8 +100,29 @@ export const listClients = (clients, { query = '', tag = '', sort = 'review' } =
 export const withLogEntry = (client, plan, hh, adviserName, nowIso) => ({
   ...client,
   log: [{ at: nowIso, income: hh.incomeToday, life: hh.lifeToday, target: hh.target, score: plan.score,
-    recommendation: client.recommendation, basis: client.basis, by: str(adviserName, 100) }, ...client.log].slice(0, MAX_LOG),
+    recommendation: client.recommendation, basis: client.basis, by: str(adviserName, 100), rules: RULES_VERSION }, ...client.log].slice(0, MAX_LOG),
 });
 
 /** A client's plan as the engine sees it now (what-ifs included). */
 export const clientPlan = (client, now = new Date()) => buildPlan({ ...client.state.answers, ...client.state.tried }, now);
+
+/**
+ * Review all clients: each finished plan re-run under the current rules, set against the figures in
+ * the client's last issued report. flag: 'crossed' (went above or below target), 'moved' (income
+ * changed by more than 5%), 'rules' (last report used older rules), 'none' (no report yet), or ''.
+ */
+export const reviewAll = (clients, now = new Date()) => clients.filter((c) => c.state.done).map((c) => {
+  const s = clientSummary(c, now), last = c.log[0] || null;
+  const change = last ? s.incomeToday - last.income : null;
+  const pctChange = last && last.income > 0 ? change / last.income : null;
+  const metNow = s.target > 0 ? s.gapToday === 0 : null, metThen = last && last.target > 0 ? last.income >= last.target : null;
+  const flag = !last ? 'none' : metNow !== null && metThen !== null && metNow !== metThen ? 'crossed'
+    : pctChange !== null && Math.abs(pctChange) > 0.05 ? 'moved' : last.rules !== RULES_VERSION ? 'rules' : '';
+  return { id: c.id, name: c.name, incomeToday: s.incomeToday, target: s.target, gapToday: s.gapToday, label: s.label,
+    lastAt: last ? last.at : '', lastIncome: last ? last.income : null, lastRules: last ? last.rules : '', change, pctChange, flag };
+}).sort((x, y) => ['crossed', 'moved', 'rules', 'none', ''].indexOf(x.flag) - ['crossed', 'moved', 'rules', 'none', ''].indexOf(y.flag) || x.name.localeCompare(y.name));
+
+export const reviewCsv = (rows) => ['Client,Monthly income now,Target,Gap,Last report,Income in last report,Change,Change %,Rules in last report,Flag',
+  ...rows.map((r) => [`"${r.name.replace(/"/g, '""')}"`, r.incomeToday, r.target, r.gapToday, r.lastAt.slice(0, 10), r.lastIncome ?? '', r.change ?? '',
+    r.pctChange === null ? '' : (r.pctChange * 100).toFixed(1), r.lastRules, r.flag].join(','))].join('\n');
+export { RULES_VERSION };

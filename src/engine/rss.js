@@ -4,6 +4,7 @@
  */
 import { _cpfEngineInit, balaRatio, makeComputeGF } from './common.js';
 import { ANNUAL_LIMIT, CPF_RATES, MMSS_PILOT_END_YEAR, MMSS_PILOT_START_YEAR, RETIREMENT_SUMS_2026, projectedSum, getDpsPremiumForAge, getPRRates, scAllocBand, scEmployeeRate } from '../policy/cpf2026.js';
+import { medicalYear } from './medical.js';
 import { computeBasicPlanParams, computeBasicPlanYearPayout, interpolateCpfLife } from './cpfLife.js';
 
 export function runRSSEngine(inputs, {
@@ -121,9 +122,6 @@ export function runRSSEngine(inputs, {
   const baseHousing   = overrideHousingOutflow !== undefined ? overrideHousingOutflow : (Number(inputs.housingOutflow) || 0);
   const oaEduLoanAnnual = Number(inputs.oaEduLoan)    || 0;
   const oaEduLoanFreq   = inputs.oaEduLoanFreq || 'one-time';
-  const baseMedical = (Number(inputs.medicalUsage) || 0) + (Number(inputs.medishieldIP) || 0);
-  const elderCareShieldAmt = Number(inputs.elderCareShield) || 0; // Q1-C: CareShield Life only begins at age 30 — gated in loop
-  const medInfl     = (Number(inputs.medicalInflationRate) || 0) / 100;
   const isSEP       = inputs.isSelfEmployed === true;
   const isLeasehold = inputs.propertyLeasehold === true;
   const totalLease  = Math.max(1, Number(inputs.propertyLeaseYears) || 99);
@@ -818,9 +816,9 @@ export function runRSSEngine(inputs, {
       currentPropValue = 0; refundApplied = true;
     }
 
-    // Medical outflow — CareShield Life (elderCareShieldAmt) only begins at age 30 per MOH policy
+    // Medical outflow: premiums and bills, with MediSave limits (see src/engine/medical.js)
     const yrSince = Math.max(0, age - startAge);
-    const totalMaOut = Math.round((baseMedical + (age >= 30 ? elderCareShieldAmt : 0)) * Math.pow(1 + medInfl, yrSince));
+    const totalMaOut = medicalYear(inputs, age, yrSince, ma).fromMa;
     ma = Math.max(0, ma - totalMaOut); yearMedOut = totalMaOut;
     totalOutSpent += activeHousing + totalMaOut;
 

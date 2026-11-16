@@ -167,3 +167,76 @@ test('a cash top-up above the limit is not accepted and does not spill into the 
   assert.ok(e.ra - f.ra >= 8000, `RA rose by ${e.ra - f.ra}`);
   assert.equal(e.oa, f.oa);
 });
+
+// ── Healthcare premiums and MediSave limits ─────────────────────────────────
+// Sources: MOH "About Integrated Shield Plans" (Additional Withdrawal Limits); CPF Board CareShield Life
+// welcome booklets 2026 and careshieldlife.gov.sg (payment period, catch-up component).
+test('Integrated Shield: MediSave pays the private part only up to the limit for the age', async () => {
+  const { ipWithdrawalLimit, medicalYear } = await import('../src/engine/medical.js');
+  assert.deepEqual([30, 40, 41, 70, 71, 90].map(ipWithdrawalLimit), [300, 300, 600, 600, 900, 900]); // age next birthday
+  const base = { medicalUsage: 0, elderCareShield: 0, medicalInflationRate: 0, medishieldMode: 'auto', ipPrivatePremium: 2000 };
+  const y = medicalYear(base, 44, 0, 50000); // next birthday 45: MediShield Life $637, limit $600
+  assert.equal(y.msl, 637); assert.equal(y.ipFromMa, 600); assert.equal(y.ipCash, 1400);
+  assert.equal(y.fromMa, 1237); assert.equal(y.cash, 1400);
+  // Manual mode: the member's own combined premium is split the same way.
+  const m = medicalYear({ ...base, medishieldMode: 'manual', medishieldIP: 2637, ipPrivatePremium: 0 }, 44, 0, 50000);
+  assert.deepEqual([m.msl, m.ipFromMa, m.ipCash], [637, 600, 1400]);
+  // MediShield Life itself has no limit, and what MediSave cannot cover becomes cash.
+  const poor = medicalYear({ ...base, ipPrivatePremium: 0 }, 84, 0, 1000); // next birthday 85: $2,616
+  assert.equal(poor.fromMa, 1000); assert.equal(poor.cash, 1616);
+});
+
+test('CareShield Life: premiums run to 67, or for 10 years after joining if later; catch-up is flat for 10 years', async () => {
+  const { careShieldAges, medicalYear } = await import('../src/engine/medical.js');
+  assert.deepEqual(careShieldAges(0), { from: 30, to: 67 });
+  assert.deepEqual(careShieldAges(45), { from: 45, to: 67 });
+  assert.deepEqual(careShieldAges(58), { from: 58, to: 67 });   // 10 payments, the last at 67
+  assert.deepEqual(careShieldAges(59), { from: 59, to: 68 });   // MOH: 10 years for those joining at 59 or older
+  assert.deepEqual(careShieldAges(65), { from: 65, to: 74 });
+  const inp = { medicalUsage: 0, medishieldMode: 'manual', medishieldIP: 0, elderCareShield: 800, careShieldJoinAge: 62, careShieldCatchUp: 300, medicalInflationRate: 5 };
+  const at = (age) => medicalYear(inp, age, age - 62, 1e6).careShield;
+  assert.equal(at(61), 0);
+  assert.equal(at(62), 1100);                                   // base 800 + catch-up 300
+  assert.equal(at(67), Math.round(800 * Math.pow(1.05, 5)) + 300);
+  assert.equal(at(71), Math.round(800 * Math.pow(1.05, 5)) + 300); // base flat after 67; last catch-up year
+  assert.equal(at(72), 0);                                      // 10 years done
+  // Born 1980 or later: nothing before 30, nothing after 67.
+  const young = { ...inp, careShieldJoinAge: 0, careShieldCatchUp: 0 };
+  assert.equal(medicalYear(young, 29, 0, 1e6).careShield, 0);
+  assert.equal(medicalYear(young, 30, 0, 1e6).careShield, 800);
+  assert.equal(medicalYear(young, 68, 0, 1e6).careShield, 0);
+});
+
+test('the engine uses the official MediShield Life premium for each age and reports cash needed', () => {
+  const rows = runProjectionEngine({ ...DEFAULT_INPUTS, currentYear: 2026, currentMonth: 6, birthMonth: 6, currentAge: 70, dpsMode: 'optout',
+    oaBalance: 0, saBalance: 0, maBalance: 3000, salaryGross: 0, salaryBonus: 0, empOaCont: 0, empSaCont: 0, empMaCont: 0, housingOutflow: 0,
+    medicalUsage: 0, elderCareShield: 0, medicalInflationRate: 0, ipPrivatePremium: 0 });
+  assert.equal(rows[0].mslPremium, 1643);                        // next birthday 71 (band 71 to 73)
+  assert.equal(rows.find((r) => r.age === 75).mslPremium, 2027); // next birthday 76 (band 76 to 78)
+  const dry = rows.find((r) => r.medCash > 0);
+  assert.ok(dry && dry.age <= 73 && dry.ma === 0, 'once MediSave is empty the premium has to be paid in cash');
+});
+
+// Source: CPF Board — "How much CPF savings can I withdraw?"
+test('the first $5,000 can be withdrawn at 55 even below the Full Retirement Sum', () => {
+  const base = { ...DEFAULT_INPUTS, currentYear: 2026, currentMonth: 6, birthMonth: 6, currentAge: 54, dpsMode: 'optout', maBalance: 0,
+    salaryGross: 0, salaryBonus: 0, empOaCont: 0, empSaCont: 0, empMaCont: 0, housingOutflow: 0, medicalUsage: 0, elderCareShield: 0 };
+  // Below the FRS with plenty in the OA: $5,000 stays out of the Retirement Account and can be taken.
+  const below = { ...base, oaBalance: 30000, saBalance: 50000 };
+  const a = runProjectionEngine({ ...below, oaWithdrawalAt55: 20000 }).find((r) => r.age === 55);
+  const b = runProjectionEngine(below).find((r) => r.age === 55);
+  assert.ok(Math.abs(a.ra - b.ra) < 100, 'the Retirement Account is not reduced (extra interest aside)');
+  assert.ok(b.oa - a.oa > 4900 && b.oa - a.oa < 5300, `only $5,000 comes out: OA lower by ${b.oa - a.oa}`);
+  // Below the FRS with almost nothing in the OA: the rest of the $5,000 comes from Special Account savings.
+  const thin = { ...base, oaBalance: 2000, saBalance: 50000 };
+  const e = runProjectionEngine({ ...thin, oaWithdrawalAt55: 5000 }).find((r) => r.age === 55);
+  const f = runProjectionEngine(thin).find((r) => r.age === 55);
+  assert.ok(f.ra - e.ra > 2800 && f.ra - e.ra < 3300, `RA lower by ${f.ra - e.ra}`);
+  assert.ok(e.oa < 100, 'the Ordinary Account is emptied (interest aside)');
+  // Above the Full Retirement Sum, the excess can be withdrawn and the RA is untouched.
+  const above = { ...base, oaBalance: 200000, saBalance: 150000 };
+  const c = runProjectionEngine({ ...above, oaWithdrawalAt55: 50000 }).find((r) => r.age === 55);
+  const d = runProjectionEngine(above).find((r) => r.age === 55);
+  assert.equal(c.ra, d.ra);
+  assert.ok(d.oa - c.oa > 49000 && d.oa - c.oa < 53000);
+});

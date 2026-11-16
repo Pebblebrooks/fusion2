@@ -105,3 +105,93 @@ export const runConfidence = (answers, now = new Date(), { runs = 500, band = 1 
     chanceFrs: base.age < 55 ? frsHits / runs : null,
   };
 };
+
+/* ── Healthcare ───────────────────────────────────────────────────────────── */
+/**
+ * What healthcare costs do to MediSave. Money figures are in today's dollars.
+ *   points   — premiums and bills at a few ages (from MediSave, and cash on top)
+ *   runsOut  — first age at which MediSave cannot cover the year's costs (null if it always can)
+ *   cashToday — total cash needed to age 90 for costs MediSave will not or cannot pay
+ */
+export const healthcare = (plan) => {
+  const infl = plan.assumptions.inflation, age = plan.age;
+  const today = (v, atAge) => Math.round(v / Math.pow(1 + infl, Math.max(0, atAge - age)));
+  const rows = plan.rows.filter((r) => r.age <= 90);
+  const points = [age, 55, 65, 75, 85].filter((a, i, arr) => a >= age && arr.indexOf(a) === i).map((a) => {
+    const r = rows.find((x) => x.age === a);
+    return r ? { age: a, msl: today(r.mslPremium, a), fromMa: today(r.yearMedOut, a), cash: today(r.medCash, a), ma: today(r.ma, a) } : null;
+  }).filter(Boolean);
+  const dry = rows.find((r) => r.age > age && r.ma <= 0 && r.medCash > 0);
+  const firstCash = rows.find((r) => r.medCash > 0);
+  return {
+    points, runsOut: dry ? dry.age : null, cashFrom: firstCash ? firstCash.age : null,
+    cashToday: rows.reduce((s, r) => s + today(r.medCash, r.age), 0),
+    maAt65Today: age < 65 ? today(rows.find((r) => r.age === 64)?.ma ?? 0, 65) : null, bhs65Today: age < 65 ? today(plan.bhs65, 65) : null, maCoverage: plan.maCoverage,
+  };
+};
+
+/* ── Drawdown ─────────────────────────────────────────────────────────────── */
+/**
+ * Spending the Ordinary Account after payouts start, and what is left for family.
+ * Today's dollars. The CPF LIFE part is the unused premium (premium less payouts received,
+ * no interest), which CPF pays to beneficiaries; it is not estimated for the Basic plan.
+ */
+export const drawdown = (plan) => {
+  const infl = plan.assumptions.inflation, from = Math.max(plan.payoutAge, plan.age), a = plan.answers;
+  const realYear = (1 + 0.025) / (1 + infl) - 1;
+  const yearly = plan.oaMonthlyToday * 12;
+  let oa = plan.oaAtPayoutToday;
+  const left = [];
+  const esc = a.lifePlan === 'esc', basic = a.lifePlan === 'bas';
+  let paidNominal = 0, payoutNominal = plan.payout * 12;
+  for (let ageNow = from; ageNow <= 95; ageNow++) {
+    if ([75, 80, 85, 90, 95].includes(ageNow) && ageNow > from) {
+      const premiumLeft = basic ? null : Math.max(0, plan.raAtPayout - paidNominal);
+      left.push({ age: ageNow, oa: Math.max(0, Math.round(oa)),
+        life: premiumLeft === null ? null : Math.round(premiumLeft / Math.pow(1 + infl, ageNow - plan.age)) });
+    }
+    if (ageNow < plan.spreadTo) oa = Math.max(plan.oaKeepToday, (oa - yearly)) * (1 + realYear);
+    else oa *= (1 + realYear);
+    paidNominal += payoutNominal; if (esc) payoutNominal *= 1.02;
+  }
+  // At 55: the first $5,000, or everything above the Full Retirement Sum if that is more.
+  const before = plan.rows.find((r) => r.age === 54);
+  const total55 = before ? before.oa + before.sa : null;
+  const maxAt55 = total55 === null ? null : Math.max(Math.min(5000, total55), total55 - plan.frs55);
+  return {
+    from, spreadTo: plan.spreadTo, keep: plan.oaKeepToday, monthly: plan.oaMonthlyToday, startToday: plan.oaAtPayoutToday, left,
+    maxAt55Today: maxAt55 === null ? null : Math.round(maxAt55 / Math.pow(1 + infl, 55 - plan.age)), basic,
+  };
+};
+
+/* ── Solvers ──────────────────────────────────────────────────────────────── */
+const incomeFor = (a, now) => (a.hasPartner ? buildHousehold(a, now).incomeToday : buildPlan(a, now).incomeToday);
+
+/** Earliest age to stop work and still meet the income target. Searches every age; income rises with each extra year. */
+export const solveStopWork = (answers, now = new Date()) => {
+  const a = { ...DEFAULT_ANSWERS, ...answers }, base = buildPlan(a, now), target = num(a.targetIncome);
+  if (target <= 0 || a.work === 'none') return { possible: false, reason: target <= 0 ? 'no-target' : 'not-working' };
+  const lo = Math.max(base.age, 40), hi = 75;
+  let found = null;
+  for (let s = lo; s <= hi; s++) {
+    const income = incomeFor({ ...a, stopWorkAge: s }, now);
+    if (income >= target) { found = { age: s, incomeToday: income }; break; }
+  }
+  return found ? { possible: true, ...found, current: num(a.stopWorkAge), target }
+    : { possible: false, reason: 'out-of-reach', best: incomeFor({ ...a, stopWorkAge: hi }, now), target, at: hi };
+};
+
+/** Smallest yearly cash top-up (in S$500 steps) that meets the income target. */
+export const solveTopUp = (answers, now = new Date()) => {
+  const a = { ...DEFAULT_ANSWERS, ...answers }, target = num(a.targetIncome), STEP = 500, MAX = 40000;
+  if (target <= 0) return { possible: false, reason: 'no-target' };
+  const at = (amt) => incomeFor({ ...a, topUpYearly: amt }, now);
+  if (at(0) >= target) return { possible: true, amount: 0, incomeToday: at(0), target };
+  const top = at(MAX);
+  if (top < target) return { possible: false, reason: 'out-of-reach', best: top, target, at: MAX };
+  let lo = 0, hi = MAX / STEP; // income does not fall as the top-up rises
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (at(mid * STEP) >= target) hi = mid; else lo = mid; }
+  const amount = hi * STEP, plan = buildPlan({ ...a, topUpYearly: amount }, now);
+  return { possible: true, amount, incomeToday: at(amount), target, taxSaved: taxSavedByRelief(buildPlan(a, now), Math.min(amount, RSTU_RELIEF_CAP)),
+    turnedAway: plan.rows.some((r) => r.topUpNotAccepted > 0) };
+};

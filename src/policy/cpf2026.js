@@ -223,3 +223,6 @@ export const getMslPremiumForAge = (age) => {
   for (const s of MSL_PREMIUMS) { if (age <= s.maxAge) return s.p; }
   return 2826; // above 90
 };
+
+/** Date the rules in this folder were last checked against official sources. Stamped on advice records. */
+export const RULES_VERSION = '2026-11-16';
