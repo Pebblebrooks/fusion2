@@ -32,7 +32,9 @@ export default function MyPlanChapter({ plan, moves, now, onUndo, onRemove, onPi
                   <p className="st-move-name">{m.label}</p>
                   <p className="small muted">{chapterTitle(m.chapter)}{day(m.at) ? ` · saved ${day(m.at)}` : ''}{m.active ? '' : ' · changed since, no longer in your plan'}</p>
                 </div>
-                {m.active && <p className={`fig st-move-gain ${m.gain >= 0 ? 'gain' : 'danger'}`}>{m.gain >= 0 ? '+' : '−'}{money(Math.abs(m.gain))}<span className="small muted"> a month</span></p>}
+                {m.active && (m.gain !== 0
+                  ? <p className={`fig st-move-gain ${m.gain > 0 ? 'gain' : 'danger'}`}>{m.gain > 0 ? '+' : '−'}{money(Math.abs(m.gain))}<span className="small muted"> a month</span></p>
+                  : <p className="small muted">{m.chapter === 'family' ? 'Lowers your tax' : 'No change to your income'}</p>)}
                 <div className="st-row tight no-print">
                   {m.active
                     ? <button type="button" className="btn btn-ghost" onClick={() => onUndo(m)}>Undo</button>

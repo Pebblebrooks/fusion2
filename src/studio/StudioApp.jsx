@@ -15,6 +15,7 @@ import { BuildingChapter, Turning55Chapter, PayoutChapter } from './Chapters.jsx
 import MyPlanChapter from './MyPlan.jsx';
 import { HomeChapter, LaterChapter, LegacyChapter } from './LaterChapters.jsx';
 import WhatIfPanel from './WhatIf.jsx';
+import FamilyChapter from './Family.jsx';
 
 const MAX_MOVES = 20;
 
@@ -155,6 +156,7 @@ export default function StudioApp() {
         {allowed && chapter === 'today' && <TodayChapter plan={base} answers={state.answers} onChange={update} sample={sample} onPick={pick} />}
         {allowed && chapter === 'building' && <BuildingChapter {...props} />}
         {allowed && chapter === 'turning55' && <Turning55Chapter {...props} />}
+        {allowed && chapter === 'family' && <FamilyChapter {...props} onFact={update} />}
         {allowed && chapter === 'home' && <HomeChapter {...props} onFact={update} />}
         {allowed && chapter === 'payout' && <PayoutChapter {...props} />}
         {allowed && chapter === 'later' && <LaterChapter {...props} />}

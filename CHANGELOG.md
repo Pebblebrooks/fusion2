@@ -6,6 +6,13 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.4.0-studio.5 — 16 Nov 2026
+Fusion Studio, Phase 2 part 2: Family (studio branch preview only). No change to CPF engine calculations.
+- **Family:** your household's monthly income with a partner (each person's own plan, from the planner's household model), and the income gap against your target treated as the household's. Partner details save as you type.
+- **Helping parents:** try a yearly cash top-up to your parents' CPF. Your own CPF is unchanged; Studio shows the income tax saved (relief up to S$8,000 a year for loved ones, separate from the S$8,000 for your own account, checked against CPF and IRAS rules). Saved moves show "Lowers your tax" on My plan.
+- New plan field `parentTopUpYearly` (default 0). It does not reach the engine; plans without it open unchanged.
+- **Not yet built, pending your decision on engine changes:** children's education from the Ordinary Account (CPF Education Loan Scheme) and Ordinary Account transfers to parents. Rule checks found the engine does not credit education repayments back to the Ordinary Account, has no start age for education, and does not apply the donor's set-aside before transfers to loved ones.
+
 ## 3.4.0-studio.4 — 16 Nov 2026
 Fusion Studio, Phase 2 part 1 (studio branch preview only). No change to calculations: the new chapters use the planner's existing, tested models.
 - **Home:** what the home loan takes from the Ordinary Account and what that costs in monthly income (the plan re-run without it); a warning if the Ordinary Account runs out before the loan ends. Facts about the home save as you type. Try selling or right-sizing, a next home and the Silver Housing Bonus; Show how has where the sale money goes and the CPF refund.

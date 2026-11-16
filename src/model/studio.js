@@ -3,15 +3,15 @@
  * Every figure comes from buildPlan (src/model/plan.js), which runs the same CPF engine as the
  * planner and the classic planner. Screens never work numbers out themselves.
  */
-import { DEFAULT_ANSWERS, buildPlan, findMoves, stressTests, taxSavedByTopUp } from './plan.js';
-import { healthcare, drawdown, solveStopWork, solveTopUp } from './household.js';
+import { DEFAULT_ANSWERS, buildPlan, findMoves, stressTests, taxSavedByTopUp, taxSavedByRelief, RSTU_RELIEF_CAP } from './plan.js';
+import { healthcare, drawdown, solveStopWork, solveTopUp, buildHousehold } from './household.js';
 import { RETIREMENT_SUMS_2026, RETIREMENT_SUMS_2027, projectedSum, SHB } from '../policy/cpf2026.js';
 
 /** Chapters in life order. `ready` = built in this release; the rest show as coming. */
 export const CHAPTERS = [
   { id: 'today', title: 'Today', question: 'Where do I stand today?', ready: true },
   { id: 'building', title: 'Building', question: 'Will my savings grow enough?', ready: true },
-  { id: 'family', title: 'Family', question: 'What do my children and parents cost me?' },
+  { id: 'family', title: 'Family', question: 'What do my children and parents cost me?', ready: true },
   { id: 'home', title: 'Home', question: 'How much CPF does my home use?', ready: true },
   { id: 'turning55', title: 'Turning 55', question: 'What happens to my CPF at 55?', ready: true },
   { id: 'payout', title: 'Payout', question: 'How much will I get each month?', ready: true },
@@ -194,6 +194,7 @@ export const describeChange = (key, value, plan) => {
     case 'medInflation': return `Medical costs rise ${value}% a year`;
     case 'ipPrivate': return value > 0 ? `Integrated Shield private part ${money(value)} a year` : 'MediShield Life only';
     case 'medUsage': return `Medical bills of ${money(value)} a year from MediSave`;
+    case 'parentTopUpYearly': return value > 0 ? `Top up your parents' CPF by ${money(value)} a year in cash` : 'No cash top-ups for your parents';
     case 'oaKeep': return value > 0 ? `Keep ${money(value)} of Ordinary Account savings untouched` : 'Spend all Ordinary Account savings';
     default: return `${key}: ${value}`;
   }
@@ -277,7 +278,7 @@ export const legacyScene = (plan) => {
 export const KEY_CHAPTER = {
   realPayGrowth: 'building', stopWorkAge: 'building', topUpYearly: 'turning55', oaToSaYearly: 'turning55',
   payoutAge: 'payout', lifePlan: 'payout', oaSpreadTo: 'payout', housingMonthly: 'home', sellHomeAge: 'home', nextHomeCost: 'home',
-  medInflation: 'later', ipPrivate: 'later', medUsage: 'later', oaKeep: 'legacy',
+  medInflation: 'later', ipPrivate: 'later', medUsage: 'later', oaKeep: 'legacy', parentTopUpYearly: 'family',
 };
 const chapterFor = (change) => KEY_CHAPTER[Object.keys(change)[0]] || 'payout';
 
@@ -295,5 +296,27 @@ export const whatIf = (answers, now = new Date()) => {
     income: base.incomeToday, target, gap: base.gapToday, best,
     stopWork: stop && stop.possible ? { age: stop.age, change: { stopWorkAge: stop.age }, chapter: 'building' } : stop ? { possible: false, best: stop.best } : null,
     topUp: topUp && topUp.possible ? { amount: topUp.amount, taxSaved: topUp.taxSaved ?? taxSavedByTopUp(base, topUp.amount), change: { topUpYearly: topUp.amount }, chapter: 'turning55' } : topUp ? { possible: false } : null,
+  };
+};
+
+/* ── Chapter 3: Family ───────────────────────────────────────────────────── */
+/**
+ * Partner: the household's income from the planner's household model (each person's own plan).
+ * Parents: a cash top-up to their Special or Retirement Account leaves your own CPF unchanged; it earns
+ * up to S$8,000 a year of tax relief, separate from the S$8,000 for top-ups to your own account.
+ * Children's education from the Ordinary Account is not shown yet (see the engine note in Show how).
+ */
+export const familyScene = (plan, now = new Date()) => {
+  const a = plan.answers;
+  const h = buildHousehold(a, now);
+  const own = Math.min(Number(a.topUpYearly) || 0, RSTU_RELIEF_CAP);
+  const parentRelief = Math.min(Number(a.parentTopUpYearly) || 0, RSTU_RELIEF_CAP);
+  const taxSaved = parentRelief > 0 ? taxSavedByRelief(plan, own + parentRelief) - taxSavedByRelief(plan, own) : 0;
+  return {
+    hasPartner: !!a.hasPartner, household: h.incomeToday, you: h.you.incomeToday, partner: h.partner ? h.partner.incomeToday : 0,
+    partnerLife: h.partner ? h.partner.payoutToday : 0, partnerAge: h.partner ? h.partner.age : null, partnerPayoutAge: h.partner ? h.partner.payoutAge : null,
+    yearBoth: h.yearBoth, target: h.target, gap: h.gapToday, above: h.target > 0 ? Math.max(0, h.incomeToday - h.target) : 0,
+    status: h.target <= 0 ? 'no-target' : h.gapToday > 0 ? 'gap' : 'on-track',
+    parentTopUp: Number(a.parentTopUpYearly) || 0, parentRelief, taxSaved,
   };
 };

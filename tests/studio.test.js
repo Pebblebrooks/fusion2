@@ -3,22 +3,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_ANSWERS, buildPlan } from '../src/model/plan.js';
 import { CHAPTERS, cleanStudio, todayScene, chapterWhen, buildingScene, turning55Scene, payoutScene, sumsForYear,
-  makeMove, undoMove, myPlanScene, nextChapter, prevChapter, homeScene, laterScene, legacyScene, whatIf, KEY_CHAPTER, describeChange } from '../src/model/studio.js';
+  makeMove, undoMove, myPlanScene, nextChapter, prevChapter, homeScene, laterScene, legacyScene, whatIf, KEY_CHAPTER, describeChange, familyScene } from '../src/model/studio.js';
+import { taxSavedByRelief } from '../src/model/plan.js';
+import { buildHousehold } from '../src/model/household.js';
 import { interpolateCpfLife, raAtPayoutStart } from '../src/engine/cpfLife.js';
 import { cleanState } from '../src/model/clients.js';
 
 const NOW = new Date('2026-11-16T12:00:00+08:00');
 const plan = (over = {}) => buildPlan({ ...DEFAULT_ANSWERS, ...over }, NOW);
 
-test('chapters run in life order and end with My plan; all but Family are built', () => {
+test('chapters run in life order and end with My plan; all are built', () => {
   assert.deepEqual(CHAPTERS.map((c) => c.id), ['today', 'building', 'family', 'home', 'turning55', 'payout', 'later', 'legacy', 'plan']);
-  assert.deepEqual(CHAPTERS.filter((c) => !c.ready).map((c) => c.id), ['family']);
-  // Next / back skip chapters not built yet
-  assert.equal(nextChapter('building').id, 'home');
+  assert.ok(CHAPTERS.every((c) => c.ready));
+  assert.equal(nextChapter('building').id, 'family');
   assert.equal(nextChapter('payout').id, 'later');
   assert.equal(nextChapter('legacy').id, 'plan');
   assert.equal(nextChapter('plan'), null);
-  assert.equal(prevChapter('home').id, 'building');
+  assert.equal(prevChapter('home').id, 'family');
   assert.equal(prevChapter('today'), null);
   for (const c of CHAPTERS) assert.match(c.question, /\?$/, `${c.id} opens with a question`);
 });
@@ -217,4 +218,22 @@ test('What if: best moves and target answers open the chapter that owns the sett
   assert.ok(w.topUp.amount > 0);
   // every setting a chapter can change has plain words
   for (const k of Object.keys(KEY_CHAPTER)) assert.doesNotMatch(describeChange(k, DEFAULT_ANSWERS[k] || 1), new RegExp(`^${k}:`));
+});
+
+test('Family: household income from each person\'s own plan; parents\' top-ups change tax only', () => {
+  const a = { hasPartner: true, pBirthYear: 1993, pSalary: 5000, pOa: 40000, pSa: 30000, pMa: 25000, targetIncome: 6000 };
+  const p = plan(a), f = familyScene(p, NOW);
+  const h = buildHousehold({ ...DEFAULT_ANSWERS, ...a }, NOW);
+  assert.equal(f.household, h.incomeToday);
+  assert.equal(f.household, f.you + f.partner);
+  assert.equal(f.taxSaved, 0);
+  const withTop = plan({ ...a, parentTopUpYearly: 10000 });
+  assert.equal(withTop.incomeToday, p.incomeToday, 'your own CPF is unchanged');
+  const ft = familyScene(withTop, NOW);
+  assert.equal(ft.parentRelief, 8000); // relief capped at S$8,000 for loved ones
+  assert.equal(ft.taxSaved, taxSavedByRelief(withTop, 8000));
+  // separate from the S$8,000 for your own top-up: worked out at the margin above it
+  const both = familyScene(plan({ ...a, parentTopUpYearly: 8000, topUpYearly: 8000 }), NOW);
+  assert.equal(both.taxSaved, taxSavedByRelief(plan({ ...a, topUpYearly: 8000 }), 16000) - taxSavedByRelief(plan({ ...a, topUpYearly: 8000 }), 8000));
+  assert.equal(makeMove('family', { parentTopUpYearly: 6000 }, DEFAULT_ANSWERS).label, "Top up your parents' CPF by S$6,000 a year in cash");
 });

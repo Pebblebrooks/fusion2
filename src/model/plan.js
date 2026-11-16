@@ -56,6 +56,7 @@ export const DEFAULT_ANSWERS = {
   shb: false, shbNextFlat: '3r', shbCommit: 60000, // Silver Housing Bonus
   // Top-ups and tax
   srsYearly: 0, srsReturn: 3,
+  parentTopUpYearly: 0,    // cash top-up to parents' / grandparents' SA or RA: tax relief only, your own CPF is unchanged
   // Healthcare (yearly, today's dollars). MediShield Life premiums come from the official age table.
   medUsage: 500,           // medical bills paid from MediSave
   ipPrivate: 0,            // private part of an Integrated Shield Plan

@@ -138,7 +138,8 @@ just received, so open tabs cannot re-save each other in a loop.
 | `src/model/studio.js` | Pure functions: chapter list, `cleanStudio` (Studio's part of the plan: chapter, saved moves), one scene model per chapter (`todayScene`, `buildingScene`, `turning55Scene`, `payoutScene`, `myPlanScene`) and moves (`makeMove`, `undoMove`). Figures come from `buildPlan`. Tested in `tests/studio.test.js`. |
 | `src/studio/StudioApp.jsx` | Shell: header, life timeline, access check, chapter routing, changes being tried, saving and undoing moves. |
 | `src/studio/shared.jsx` | Scene frame, income-gap pill, "Save this move" bar, Show how, previous/next buttons. |
-| `src/studio/Today.jsx`, `Chapters.jsx`, `MyPlan.jsx` | Chapter screens: Today; Building, Turning 55, Payout; My plan. |
+| `src/studio/Today.jsx`, `Family.jsx`, `Chapters.jsx`, `LaterChapters.jsx`, `MyPlan.jsx` | Chapter screens: Today; Family; Building, Turning 55, Payout; Home, Later life, Legacy; My plan. |
+| `src/studio/WhatIf.jsx` | What if panel: best moves and answers worked back from the target; Try it opens the owning chapter. |
 | `src/studio/studio.css` | Studio styles; imports the planner's. Classes are prefixed `st-`. |
 
 Rules for every scene: one plain question; one large answer with one sentence of meaning; at most one
