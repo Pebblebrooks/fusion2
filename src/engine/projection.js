@@ -5,6 +5,7 @@
 import { _cpfEngineInit, balaRatio, makeComputeGF } from './common.js';
 import { ANNUAL_LIMIT, CPF_RATES, MMSS_PILOT_END_YEAR, MMSS_PILOT_START_YEAR, RETIREMENT_SUMS_2026, projectedSum, getDpsPremiumForAge, getPRRates, scAllocBand, scEmployeeRate, silverHousingBonus, SHB, cohortFRS } from '../policy/cpf2026.js';
 import { medicalYear } from './medical.js';
+import { eduWithdrawsAt, eduRepayStartAge, makeEduLoan, eduLoanYear, lovedOneTransfer } from './family.js';
 
 // ── BUG-5 fix: runProjectionWithDWZ ─────────────────────────────────────────
 // Shared Die-with-Zero multi-pass wrapper — extracts the DWZ logic that was
@@ -172,6 +173,13 @@ export function runProjectionEngine(inputs, {
   const annualOaToMa = Number(inputs.oaToMaTransfer) || 0;
   const oaToMaForLovedOne = inputs.oaToMaForLovedOne === true;
   const oaToSaForLovedOne = inputs.oaToSaForLovedOne === true;
+  // Transfers to loved ones (fix S, 17 Nov 2026): a retirement sum is kept back first (see family.js).
+  // oaToLovedOneYearly is a separate yearly transfer, so it can run alongside the member's own OA→SA transfer.
+  const lovedOneRelation = ['parent', 'spouse', 'other'].includes(inputs.lovedOneRelation) ? inputs.lovedOneRelation : 'parent';
+  const lovedOneYearly = Number(inputs.oaToLovedOneYearly) || 0;
+  const lovedOneFromAge = Number(inputs.lovedOneFromAge) || 0;   // 0 = from now
+  const lovedOneYears = Math.max(1, Number(inputs.lovedOneYears) || 1);
+  const ownsPropertyForTransfer = inputs.includeProperty !== false && (Number(inputs.propertyValue) || 0) > 0;
   // Frequency flags — used to zero out recurring fields for 'one-time' application
   const vc3aFreq     = inputs.vc3aFreq     || 'annual';
   const vcSaFreq     = inputs.vcSaFreq     || 'annual';
@@ -230,6 +238,9 @@ export function runProjectionEngine(inputs, {
   const baseHousing = overrideHousingOutflow !== undefined ? overrideHousingOutflow : (Number(inputs.housingOutflow) || 0);
   const oaEduLoanAnnual = Number(inputs.oaEduLoan) || 0;  // D1: OA Education Loan Scheme outflow
   const oaEduLoanFreq   = inputs.oaEduLoanFreq || 'one-time';
+  // Education Loan Scheme timing and repayment (fixes P and Q, 17 Nov 2026; see family.js)
+  const oaEduStartAge   = Number(inputs.oaEduStartAge) || 0;   // 0 = from the first projection year (as before)
+  const oaEduRepayYears = Number(inputs.oaEduRepayYears) || 12; // repaid into the OA over up to 12 years
   // Housing grants + insurance — declared here so engine loop can reference them
   // Housing grants — same property-type gating as RSS engine (see _totalHousingGrants for detail).
   const _pTypePE = inputs.propertyType || 'hdb_bto';
@@ -324,6 +335,9 @@ export function runProjectionEngine(inputs, {
   const housingCpfUsedToDate = Math.max(0, Number(inputs.housingCpfUsedToDate) || 0);
   let cumHousingOA = housingCpfUsedToDate; // tracks cumulative OA used for housing (principal)
   let cumEduOut = 0;           // P3-B: cumulative OA education loan withdrawals for 40% cap anchoring
+  const eduLoan = makeEduLoan(); // what the student still owes back to the member's OA, with interest
+  const eduOpts = { startAge, from: oaEduStartAge, freq: oaEduLoanFreq, dur: oaEduLoanDur };
+  const eduRepayFrom = eduRepayStartAge(eduOpts);
   // cumHousingFV tracks the compound future value of ALL OA housing withdrawals at 2.5%/yr.
   // Each year: cumHousingFV = (cumHousingFV + activeHousing) * 1.025
   // This correctly compounds each year's withdrawal forward from its own date.
@@ -508,6 +522,7 @@ export function runProjectionEngine(inputs, {
 
     let yearCpfisOut = 0;    // CPFIS outflow from OA + SA this year
     let yearEduOut = 0;      // D1: OA Education Loan Scheme outflow this year
+    let yearEduRepayIn = 0;  // education loan repaid into the OA this year
     let yearRentExpOut = 0;  // Rent expense: monthly rent paid as tenant, debited from private assets
 
     // ── Mid-year (June) convention: capture OPENING balances before any inflows ──
@@ -646,43 +661,44 @@ export function runProjectionEngine(inputs, {
       pledgeWithdrawalApplied = true;
     }
 
+    // Transfer to a loved one: what CPF allows after the member keeps back a retirement sum (family.js).
+    // The loved one's account is not tracked here; for the member it is money out.
+    const giveToLovedOne = (amount) => {
+      const yrsNow = Math.max(0, (baseYear + (age - startAge)) - 2026);
+      const t = lovedOneTransfer({ amount, age, oa, sa, ra, relation: lovedOneRelation, ownsProperty: ownsPropertyForTransfer,
+        propertyValue: currentPropValue, brs: Math.round(projectedSum('BRS', rsGrowth, yrsNow)), frs: Math.round(projectedSum('FRS', rsGrowth, yrsNow)) });
+      oa -= t.fromOa; ra -= t.fromRa;
+      yearLovedOneOut += t.total; totalOutSpent += t.total;
+    };
+
     // OA→SA transfer (annual/one-time, before 55 only)
     // Policy: capped at (1) OA balance and (2) FRS headroom in SA (self only).
-    // For loved one: OA is simply an outflow; SA/RA of the loved one is not tracked here.
     if (age < 55 && annualOaToSa > 0 && effOaToSaFreq > 0 && !isForeigner) { // B1: foreigners have no CPF
-      const actualTransfer = oaToSaForLovedOne
-        ? Math.min(annualOaToSa, oa)
-        : (() => {
-            const projFRS_oaToSa = Math.round(projectedSum('FRS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-            const saRoom_oaToSa = Math.max(0, projFRS_oaToSa - sa);
-            return Math.min(annualOaToSa, oa, saRoom_oaToSa);
-          })();
-      oa -= actualTransfer;
-      if (!oaToSaForLovedOne) {
-        sa += actualTransfer;
+      if (oaToSaForLovedOne) {
+        giveToLovedOne(annualOaToSa);
       } else {
-        yearLovedOneOut += actualTransfer;
-        totalOutSpent += actualTransfer;
+        const projFRS_oaToSa = Math.round(projectedSum('FRS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        const actualTransfer = Math.min(annualOaToSa, oa, Math.max(0, projFRS_oaToSa - sa));
+        oa -= actualTransfer;
+        sa += actualTransfer;
       }
     }
     // OA→RA transfer (annual/one-time, age 55 and above only)
-    // Policy: voluntary transfers to loved one's RA = OA outflow only (no internal RA credit).
     if (age >= 55 && annualOaToSa > 0 && effOaToSaFreq > 0 && !isForeigner) { // B1: foreigners have no CPF
-      const actualTransferRA = oaToSaForLovedOne
-        ? Math.min(annualOaToSa, oa)
-        : (() => {
-            const projERS_oaToRa = Math.round(projectedSum('ERS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
-            const raRoom_oaToRa = Math.max(0, projERS_oaToRa - ra);
-            return Math.min(annualOaToSa, oa, raRoom_oaToRa);
-          })();
-      oa -= actualTransferRA;
-      if (!oaToSaForLovedOne) {
+      if (oaToSaForLovedOne) {
+        giveToLovedOne(annualOaToSa);
+      } else {
+        const projERS_oaToRa = Math.round(projectedSum('ERS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
+        const actualTransferRA = Math.min(annualOaToSa, oa, Math.max(0, projERS_oaToRa - ra));
+        oa -= actualTransferRA;
         ra += actualTransferRA;
         cumRaCashTopUps += actualTransferRA;
-      } else {
-        yearLovedOneOut += actualTransferRA;
-        totalOutSpent += actualTransferRA;
       }
+    }
+    // Separate yearly transfer to a loved one (runs alongside the member's own transfer)
+    if (lovedOneYearly > 0 && !isForeigner) {
+      const from = lovedOneFromAge > 0 ? lovedOneFromAge : startAge;
+      if (age >= from && age < from + lovedOneYears) giveToLovedOne(lovedOneYearly);
     }
 
     // OA→MA transfer: CPF policy requires age 55+, FRS or BRS+property already set aside.
@@ -1346,10 +1362,10 @@ export function runProjectionEngine(inputs, {
     //   40% of current OA balance each year — housing is already deducted from oa above.
     // Age 55+ rule: FRS must be set aside in RA before OA can be used for education.
     // Interest at 2.5%/yr accrues on withdrawn amount immediately (same rate as OA).
-    //   From the lender's projection perspective this is a pure OA outflow — cash repayment
-    //   back to OA is not modelled here (repayment occurs externally in cash).
+    // Fixes P and Q (17 Nov 2026): withdrawals start at oaEduStartAge, and the student's repayments
+    //   (amount withdrawn plus the OA interest it would have earned) come back into the OA (family.js).
     if (oaEduLoanAnnual > 0) {
-      const effEduFreq = oaEduLoanFreq === 'one-time' && !isFirstYear ? 0 : (oaEduLoanDur > 0 && yearIdx >= oaEduLoanDur) ? 0 : 1;
+      const effEduFreq = eduWithdrawsAt(age, eduOpts) ? 1 : 0;
       if (effEduFreq > 0) {
         const yrsSince2026_edu = Math.max(0, (baseYear + (age - startAge)) - 2026);
         const projFRS_edu = Math.round(projectedSum('FRS', rsGrowth, yrsSince2026_edu));
@@ -1368,6 +1384,10 @@ export function runProjectionEngine(inputs, {
           totalOutSpent += actualEduLoan;
         }
       }
+    }
+    if (oaEduLoanAnnual > 0 || eduLoan.owed > 0) {
+      const repaid = eduLoanYear(eduLoan, { age, repayFrom: eduRepayFrom, years: oaEduRepayYears, withdrawn: yearEduOut });
+      if (repaid > 0 && !isForeigner) { oa += repaid; yearEduRepayIn = repaid; yearInflow += repaid; totalInjected += repaid; }
     }
 
     // Property Monetisation — one-time event (downgrade / LBS / Silver Housing Bonus)
@@ -1573,6 +1593,7 @@ export function runProjectionEngine(inputs, {
       yearLovedOneOut: Math.round(yearLovedOneOut),
       yearCpfisOut: Math.round(yearCpfisOut),
       yearEduOut: Math.round(yearEduOut),
+      yearEduRepayIn: Math.round(yearEduRepayIn),
       yearRentExpOut: Math.round(yearRentExpOut),
       yearEventsIn:  Math.round(yearEventsIn),   // Rev #D2: windfall inflows
       yearEventsOut: Math.round(yearEventsOut),  // Rev #D2: medical crisis outflows

@@ -5,6 +5,7 @@
 import { _cpfEngineInit, balaRatio, makeComputeGF } from './common.js';
 import { ANNUAL_LIMIT, CPF_RATES, MMSS_PILOT_END_YEAR, MMSS_PILOT_START_YEAR, RETIREMENT_SUMS_2026, projectedSum, getDpsPremiumForAge, getPRRates, scAllocBand, scEmployeeRate } from '../policy/cpf2026.js';
 import { medicalYear } from './medical.js';
+import { eduWithdrawsAt, eduRepayStartAge, makeEduLoan, eduLoanYear, lovedOneTransfer } from './family.js';
 import { computeBasicPlanParams, computeBasicPlanYearPayout, interpolateCpfLife } from './cpfLife.js';
 
 export function runRSSEngine(inputs, {
@@ -84,6 +85,14 @@ export function runRSSEngine(inputs, {
   const annualOaToMa      = Number(inputs.oaToMaTransfer) || 0;
   const oaToMaForLovedOne = inputs.oaToMaForLovedOne === true;
   const oaToSaForLovedOne = inputs.oaToSaForLovedOne === true;
+  // Transfers to loved ones and the Education Loan Scheme follow the same rules as projection.js (family.js).
+  const lovedOneRelation = ['parent', 'spouse', 'other'].includes(inputs.lovedOneRelation) ? inputs.lovedOneRelation : 'parent';
+  const lovedOneYearly = Number(inputs.oaToLovedOneYearly) || 0;
+  const lovedOneFromAge = Number(inputs.lovedOneFromAge) || 0;
+  const lovedOneYears = Math.max(1, Number(inputs.lovedOneYears) || 1);
+  const ownsPropertyForTransfer = inputs.includeProperty !== false && (Number(inputs.propertyValue) || 0) > 0;
+  const oaEduStartAge   = Number(inputs.oaEduStartAge) || 0;
+  const oaEduRepayYears = Number(inputs.oaEduRepayYears) || 12;
   const vc3aFreq      = inputs.vc3aFreq     || 'annual';
   const vcSaFreq      = inputs.vcSaFreq     || 'annual';
   const vcMaFreq      = inputs.vcMaFreq     || 'annual';
@@ -207,6 +216,7 @@ export function runRSSEngine(inputs, {
   const sellPropertyAge = Number(inputs.sellPropertyAge) || 0;
   let cumHousingOA = 0;
   let cumEduOut    = 0;
+  const eduLoan = makeEduLoan();
   let cumHousingFV = 0;
   let refundApplied = startAge >= sellPropertyAge && sellPropertyAge > 0;
   let cumRaCashTopUps = 0;
@@ -268,7 +278,7 @@ export function runRSSEngine(inputs, {
     let yearOaInterest = 0, yearSaRaInterest = 0, yearMaInterest = 0;
     let yearHousingOut = 0, yearMedOut = 0, yearOaDrawOut = 0, yearLovedOneOut = 0, yearRentExpOut = 0;
     let yearEventsIn = 0, yearEventsOut = 0;
-    let yearCpfisOut = 0, yearEduOut = 0;
+    let yearCpfisOut = 0, yearEduOut = 0, yearEduRepayIn = 0;
     let rssPayoutThisYear = 0;  // ← RSS-specific; 0 until rssPayoutStart reached
 
     // Life events
@@ -402,16 +412,24 @@ export function runRSSEngine(inputs, {
       ra = Math.max(0, ra - actualPledgeWithdraw); totalOutSpent += actualPledgeWithdraw; yearOaDrawOut += actualPledgeWithdraw; pledgeWithdrawalApplied = true;
     }
 
-    // OA→SA/RA transfers
+    // OA→SA/RA transfers. To a loved one: a retirement sum is kept back first (family.js).
+    const giveToLovedOne = (amount) => {
+      const yrsNow = Math.max(0, (baseYear + (age - startAge)) - 2026);
+      const t = lovedOneTransfer({ amount, age, oa, sa, ra, relation: lovedOneRelation, ownsProperty: ownsPropertyForTransfer,
+        propertyValue: currentPropValue, brs: Math.round(projectedSum('BRS', rsGrowth, yrsNow)), frs: Math.round(projectedSum('FRS', rsGrowth, yrsNow)) });
+      oa -= t.fromOa; ra -= t.fromRa; yearLovedOneOut += t.total; totalOutSpent += t.total;
+    };
     if (age < 55 && annualOaToSa > 0 && effOaToSaFreq > 0 && !isForeigner) {
-      const actualTransfer = oaToSaForLovedOne ? Math.min(annualOaToSa, oa) : (() => { const projFRS_oaToSa = Math.round(projectedSum('FRS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026))); return Math.min(annualOaToSa, oa, Math.max(0, projFRS_oaToSa - sa)); })();
-      oa -= actualTransfer;
-      if (!oaToSaForLovedOne) { sa += actualTransfer; } else { yearLovedOneOut += actualTransfer; totalOutSpent += actualTransfer; }
+      if (oaToSaForLovedOne) giveToLovedOne(annualOaToSa);
+      else { const projFRS_oaToSa = Math.round(projectedSum('FRS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026))); const actualTransfer = Math.min(annualOaToSa, oa, Math.max(0, projFRS_oaToSa - sa)); oa -= actualTransfer; sa += actualTransfer; }
     }
     if (age >= 55 && annualOaToSa > 0 && effOaToSaFreq > 0 && !isForeigner) {
-      const actualTransferRA = oaToSaForLovedOne ? Math.min(annualOaToSa, oa) : (() => { const projERS_oaToRa = Math.round(projectedSum('ERS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026))); return Math.min(annualOaToSa, oa, Math.max(0, projERS_oaToRa - ra)); })();
-      oa -= actualTransferRA;
-      if (!oaToSaForLovedOne) { ra += actualTransferRA; cumRaCashTopUps += actualTransferRA; } else { yearLovedOneOut += actualTransferRA; totalOutSpent += actualTransferRA; }
+      if (oaToSaForLovedOne) giveToLovedOne(annualOaToSa);
+      else { const projERS_oaToRa = Math.round(projectedSum('ERS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026))); const actualTransferRA = Math.min(annualOaToSa, oa, Math.max(0, projERS_oaToRa - ra)); oa -= actualTransferRA; ra += actualTransferRA; cumRaCashTopUps += actualTransferRA; }
+    }
+    if (lovedOneYearly > 0 && !isForeigner) {
+      const from = lovedOneFromAge > 0 ? lovedOneFromAge : startAge;
+      if (age >= from && age < from + lovedOneYears) giveToLovedOne(lovedOneYearly);
     }
 
     // OA→MA transfer
@@ -829,8 +847,9 @@ export function runRSSEngine(inputs, {
     }
 
     // Education loan
+    const eduOpts = { startAge, from: oaEduStartAge, freq: oaEduLoanFreq, dur: oaEduLoanDur };
     if (oaEduLoanAnnual > 0) {
-      const effEduFreq = oaEduLoanFreq === 'one-time' && !isFirstYear ? 0 : (oaEduLoanDur > 0 && yearIdx >= oaEduLoanDur) ? 0 : 1;
+      const effEduFreq = eduWithdrawsAt(age, eduOpts) ? 1 : 0;
       if (effEduFreq > 0) {
         const projFRS_edu = Math.round(projectedSum('FRS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
         if (!(age >= 55 && ra < projFRS_edu)) {
@@ -839,6 +858,10 @@ export function runRSSEngine(inputs, {
           oa = Math.max(0, oa - actualEduLoan); cumEduOut += actualEduLoan; yearEduOut = actualEduLoan; totalOutSpent += actualEduLoan;
         }
       }
+    }
+    if (oaEduLoanAnnual > 0 || eduLoan.owed > 0) {
+      const repaid = eduLoanYear(eduLoan, { age, repayFrom: eduRepayStartAge(eduOpts), years: oaEduRepayYears, withdrawn: yearEduOut });
+      if (repaid > 0 && !isForeigner) { oa += repaid; yearEduRepayIn = repaid; yearInflow += repaid; totalInjected += repaid; }
     }
 
     // Property monetisation
@@ -1106,6 +1129,7 @@ export function runRSSEngine(inputs, {
       yearLovedOneOut:Math.round(yearLovedOneOut),
       yearCpfisOut:   Math.round(yearCpfisOut),
       yearEduOut:     Math.round(yearEduOut),
+      yearEduRepayIn: Math.round(yearEduRepayIn),
       yearRentExpOut: Math.round(yearRentExpOut),
       yearEventsIn:   Math.round(yearEventsIn),
       yearEventsOut:  Math.round(yearEventsOut),

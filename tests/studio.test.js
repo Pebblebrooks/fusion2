@@ -237,3 +237,26 @@ test('Family: household income from each person\'s own plan; parents\' top-ups c
   assert.equal(both.taxSaved, taxSavedByRelief(plan({ ...a, topUpYearly: 8000 }), 16000) - taxSavedByRelief(plan({ ...a, topUpYearly: 8000 }), 8000));
   assert.equal(makeMove('family', { parentTopUpYearly: 6000 }, DEFAULT_ANSWERS).label, "Top up your parents' CPF by S$6,000 a year in cash");
 });
+
+test('Family: tuition paid and repaid, and transfers limited by the retirement sum kept back', async () => {
+  const a = { birthYear: 1984, salary: 7500, oa: 82000, sa: 61000, ma: 48000, eduYearly: 10000, eduStartAge: 55, eduYears: 4, lovedTransferYearly: 6000, lovedFromAge: 45, lovedYears: 5 };
+  const p = plan(a), f = familyScene(p, NOW);
+  assert.equal(f.edu.from, 55);
+  assert.equal(f.edu.years, 4);
+  assert.ok(f.edu.repaid > f.edu.paid, 'repaid with interest');
+  assert.equal(f.edu.repayFrom, 60); // a year after the course ends
+  assert.equal(f.edu.repayTo - f.edu.repayFrom + 1, 12);
+  assert.equal(f.loved.sent + f.loved.short, 6000 * 5);
+  assert.ok(f.loved.short > 0, 'CPF keeps the Full Retirement Sum back first');
+  assert.equal(familyScene(plan({}), NOW).edu, null);
+  // Tuition is entered in today's dollars and raised with prices to the year fees start
+  assert.equal(p.inputs.oaEduLoan, Math.round(10000 * Math.pow(1.02, 55 - p.age)));
+  // The classic planner link carries the new settings (share links keep only known settings)
+  const { encodePlanState, decodePlanState } = await import('../src/state/shareLink.js');
+  const { toEngineInputs } = await import('../src/model/plan.js');
+  const inputs = toEngineInputs({ ...DEFAULT_ANSWERS, ...a }, NOW);
+  const back = JSON.parse(decodePlanState(encodePlanState(JSON.stringify({ appVersion: 'V4-2026', inputs }))));
+  const { DEFAULT_INPUTS } = await import('../src/inputs/defaults.js');
+  const got = { ...DEFAULT_INPUTS, ...back.inputs }; // links carry only what differs from the defaults
+  for (const k of ['oaEduStartAge', 'oaEduRepayYears', 'oaToLovedOneYearly', 'lovedOneFromAge', 'lovedOneYears']) assert.equal(got[k], inputs[k], k);
+});

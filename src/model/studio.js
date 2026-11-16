@@ -195,6 +195,14 @@ export const describeChange = (key, value, plan) => {
     case 'ipPrivate': return value > 0 ? `Integrated Shield private part ${money(value)} a year` : 'MediShield Life only';
     case 'medUsage': return `Medical bills of ${money(value)} a year from MediSave`;
     case 'parentTopUpYearly': return value > 0 ? `Top up your parents' CPF by ${money(value)} a year in cash` : 'No cash top-ups for your parents';
+    case 'eduYearly': return value > 0 ? `Pay ${money(value)} a year of tuition from your Ordinary Account` : 'No tuition from your Ordinary Account';
+    case 'eduStartAge': return `Tuition starts when you are ${value}`;
+    case 'eduYears': return `${value} years of study`;
+    case 'eduRepayYears': return `Repaid over ${value} years`;
+    case 'lovedTransferYearly': return value > 0 ? `Transfer ${money(value)} a year from your Ordinary Account to a loved one` : 'No CPF transfers to loved ones';
+    case 'lovedRelation': return `Transfers go to your ${value === 'spouse' ? 'spouse' : value === 'other' ? 'sibling or in-law' : 'parents or grandparents'}`;
+    case 'lovedFromAge': return `Transfers start at ${value}`;
+    case 'lovedYears': return `Transfers for ${value} years`;
     case 'oaKeep': return value > 0 ? `Keep ${money(value)} of Ordinary Account savings untouched` : 'Spend all Ordinary Account savings';
     default: return `${key}: ${value}`;
   }
@@ -279,6 +287,8 @@ export const KEY_CHAPTER = {
   realPayGrowth: 'building', stopWorkAge: 'building', topUpYearly: 'turning55', oaToSaYearly: 'turning55',
   payoutAge: 'payout', lifePlan: 'payout', oaSpreadTo: 'payout', housingMonthly: 'home', sellHomeAge: 'home', nextHomeCost: 'home',
   medInflation: 'later', ipPrivate: 'later', medUsage: 'later', oaKeep: 'legacy', parentTopUpYearly: 'family',
+  eduYearly: 'family', eduStartAge: 'family', eduYears: 'family', eduRepayYears: 'family',
+  lovedTransferYearly: 'family', lovedRelation: 'family', lovedFromAge: 'family', lovedYears: 'family',
 };
 const chapterFor = (change) => KEY_CHAPTER[Object.keys(change)[0]] || 'payout';
 
@@ -318,5 +328,26 @@ export const familyScene = (plan, now = new Date()) => {
     yearBoth: h.yearBoth, target: h.target, gap: h.gapToday, above: h.target > 0 ? Math.max(0, h.incomeToday - h.target) : 0,
     status: h.target <= 0 ? 'no-target' : h.gapToday > 0 ? 'gap' : 'on-track',
     parentTopUp: Number(a.parentTopUpYearly) || 0, parentRelief, taxSaved,
+    edu: eduSummary(plan), loved: lovedSummary(plan),
   };
+};
+
+/** Tuition paid from the Ordinary Account and repaid into it (dollars of each year), from the engine rows. */
+const eduSummary = (plan) => {
+  const i = plan.inputs;
+  if (!(i.oaEduLoan > 0)) return null;
+  const out = plan.rows.filter((r) => r.yearEduOut > 0), back = plan.rows.filter((r) => r.yearEduRepayIn > 0);
+  const paid = out.reduce((t, r) => t + r.yearEduOut, 0), repaid = back.reduce((t, r) => t + r.yearEduRepayIn, 0);
+  const asked = i.oaEduLoan * i.oaEduLoanDur;
+  return { yearly: i.oaEduLoan, from: i.oaEduStartAge, years: i.oaEduLoanDur, paid, repaid,
+    short: Math.max(0, asked - paid), repayFrom: back[0]?.age ?? null, repayTo: back.at(-1)?.age ?? null };
+};
+
+/** CPF transferred to a loved one, and how much of what was asked CPF would allow. */
+const lovedSummary = (plan) => {
+  const i = plan.inputs;
+  if (!(i.oaToLovedOneYearly > 0)) return null;
+  const sent = plan.rows.reduce((t, r) => t + (r.yearLovedOneOut || 0), 0);
+  const asked = i.oaToLovedOneYearly * i.lovedOneYears;
+  return { yearly: i.oaToLovedOneYearly, from: i.lovedOneFromAge, years: i.lovedOneYears, relation: i.lovedOneRelation, sent, short: Math.max(0, asked - sent) };
 };

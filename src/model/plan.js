@@ -57,6 +57,13 @@ export const DEFAULT_ANSWERS = {
   // Top-ups and tax
   srsYearly: 0, srsReturn: 3,
   parentTopUpYearly: 0,    // cash top-up to parents' / grandparents' SA or RA: tax relief only, your own CPF is unchanged
+  // Family (Studio): tuition from your Ordinary Account (CPF Education Loan Scheme), repaid into it by the student
+  eduYearly: 0,            // tuition a year, in today's dollars (0 = none)
+  eduStartAge: 0,          // your age when fees start (0 = next year)
+  eduYears: 4,             // years of study
+  eduRepayYears: 12,       // years the student takes to repay (CPF allows up to 12)
+  // Family (Studio): yearly transfer from your Ordinary Account to a loved one's CPF (no tax relief)
+  lovedTransferYearly: 0, lovedRelation: 'parent', lovedFromAge: 0, lovedYears: 5,
   // Healthcare (yearly, today's dollars). MediShield Life premiums come from the official age table.
   medUsage: 500,           // medical bills paid from MediSave
   ipPrivate: 0,            // private part of an Integrated Shield Plan
@@ -123,6 +130,24 @@ export const toEngineInputs = (answers, now = new Date()) => {
     // Withdrawal at 55 is entered in today's dollars. The engine limits it to what CPF allows.
     oaWithdrawalAt55: age < 55 ? Math.round(num(a.withdrawAt55) * Math.pow(1 + clamp(num(a.inflation, 2), 0, 6) / 100, 55 - age)) : 0,
     oaWithdrawalFreq: 'one-time',
+    ...familyInputs(a, age),
+  };
+};
+
+/**
+ * Family answers → engine inputs. Tuition is entered in today's dollars and raised with prices to the
+ * year fees start; the engine pays it from the OA, limits it to what CPF allows, and credits the
+ * student's repayments (with interest) back to the OA. Transfers to loved ones keep back a retirement sum.
+ */
+const familyInputs = (a, age) => {
+  const edu = num(a.eduYearly), start = edu > 0 ? clamp(num(a.eduStartAge) || age + 1, age, 90) : 0;
+  const give = num(a.lovedTransferYearly);
+  return {
+    oaEduLoan: edu > 0 ? Math.round(edu * Math.pow(1 + clamp(num(a.inflation, 2), 0, 6) / 100, start - age)) : 0,
+    oaEduLoanFreq: 'annual', oaEduLoanDur: edu > 0 ? clamp(num(a.eduYears, 4), 1, 8) : 0,
+    oaEduStartAge: start, oaEduRepayYears: clamp(num(a.eduRepayYears, 12), 1, 12),
+    oaToLovedOneYearly: give, lovedOneRelation: ['parent', 'spouse', 'other'].includes(a.lovedRelation) ? a.lovedRelation : 'parent',
+    lovedOneFromAge: give > 0 ? clamp(num(a.lovedFromAge) || age, age, 95) : 0, lovedOneYears: clamp(num(a.lovedYears, 5), 1, 40),
   };
 };
 

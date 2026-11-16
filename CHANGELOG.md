@@ -6,6 +6,15 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.4.0-studio.6 — 17 Nov 2026
+CPF engine corrections (owner-approved) and Family completed. Rules version 2026-11-17.
+- **Engine, Education Loan Scheme (corrections P, Q):** tuition paid from the Ordinary Account is now repaid into it by the student, with the interest it would have earned (2.5% a year), in equal yearly instalments over up to 12 years from a year after the course ends. Fees can start at a chosen age instead of only this year. Before, the money was treated as gone for good, so the Ordinary Account was understated. Affects the classic planner too, for plans that use it.
+- **Engine, transfers to loved ones (correction S):** a retirement sum is kept back first: the current Full Retirement Sum for parents or grandparents (the Basic Retirement Sum if you own a property that covers the rest), the Basic Retirement Sum for a spouse, the Full Retirement Sum for siblings and in-laws. From 55 the Ordinary Account goes first, then the Retirement Account. The classic planner's existing loved-one switch follows the same rule. A separate yearly transfer can now run alongside your own Ordinary-to-Special transfer.
+- Both engines (main and Retirement Sum Scheme) share the rules in `src/engine/family.js`. Engine rows gain `yearEduRepayIn`; recorded test results regenerated with no other change (all 1,057 rows otherwise identical).
+- **Family (Studio):** try tuition from your Ordinary Account (amount, start age, years, repayment period) and CPF transfers to a loved one, alongside cash top-ups for parents. Shows what CPF would allow, what comes back, and the effect on income.
+- New plan fields for education and transfers (defaults off); classic planner defaults and share links carry the new engine settings.
+- Rules version raised to 2026-11-17: adviser reviews flag reports issued under earlier rules.
+
 ## 3.4.0-studio.5 — 16 Nov 2026
 Fusion Studio, Phase 2 part 2: Family (studio branch preview only). No change to CPF engine calculations.
 - **Family:** your household's monthly income with a partner (each person's own plan, from the planner's household model), and the income gap against your target treated as the household's. Partner details save as you type.

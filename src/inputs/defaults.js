@@ -189,6 +189,10 @@ export const DEFAULT_INPUTS = {
   govGrantDur: 0, govGrantMaDur: 0, wisDur: 0,
   cpfisOaDur: 0, cpfisSaDur: 0, housingDur: 0,
   oaToMaDur: 0, oaToSaDur: 0, oaEduLoanDur: 0, oaWithdrawalDur: 0,
+  // Education Loan Scheme timing and repayment; separate transfers to loved ones (src/engine/family.js)
+  oaEduStartAge: 0,          // age fees start; 0 = first projection year
+  oaEduRepayYears: 12,       // student repays into the OA over up to 12 years
+  oaToLovedOneYearly: 0, lovedOneRelation: 'parent', lovedOneFromAge: 0, lovedOneYears: 1,
   // PR tenure year — 1, 2, or 3+ (3 = full rates). Only shown/relevant when citizenStatus === 'PR'.
   prYear: 3,
   // PR rate type — 'GG' (Graduated Employer + Graduated Employee, default) or
@@ -466,6 +470,8 @@ export const INPUT_LABELS = {
   cpfisOaDur: "CPFIS OA Duration (yrs)", cpfisSaDur: "CPFIS SA Duration (yrs)",
   housingDur: "Housing Duration (yrs)", oaToMaDur: "OA-MA Duration (yrs)",
   oaToSaDur: "OA-SA Duration (yrs)", oaEduLoanDur: "OA Edu Loan Duration (yrs)", oaWithdrawalDur: "OA Withdrawal Duration (yrs)",
+  oaEduStartAge: "OA Edu Loan Start Age", oaEduRepayYears: "OA Edu Loan Repayment (yrs)",
+  oaToLovedOneYearly: "OA Transfer to Loved One ($/yr)", lovedOneRelation: "Loved One", lovedOneFromAge: "Loved One Transfer Start Age", lovedOneYears: "Loved One Transfer (yrs)",
   // ── Protection Coverage labels ───────────────────────────────────────────────
   termLifeSumAssured:        "Term / Whole Life SA ($)",
   criticalIllnessSumAssured: "Critical Illness SA ($)",
