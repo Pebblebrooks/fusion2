@@ -9,13 +9,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { buildPlan, findMoves, DEFAULT_ANSWERS, ageFrom, RSTU_RELIEF_CAP } from '../model/plan.js';
 import { tierForAnyCode } from '../entitlements/gate.js';
 import { tierName, PLAN_RANK } from '../entitlements/tiers.js';
-import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink, loadBook, saveBook, newId, signOut } from './storage.js';
+import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink, loadBook, saveBook, newId, signOut, fetchAccount } from './storage.js';
 import { VERSION_LABEL } from '../version.js';
 import SavingsChart from './Chart.jsx';
 import { IncomeBar, OverviewView, HouseholdView, PropertyView, TopUpsView, ConfidenceView, HealthcareView, DrawdownView, SolveView } from './Modules.jsx';
 import { money, pct, Help, MoneyField, Choice, Slider } from './ui.jsx';
 import { CompareView, WorkspaceDetails, Assumptions, ReportView, UpgradeCode, PreviewSwitch } from './Workspace.jsx';
 import { ClientsView, MeetingView } from './Adviser.jsx';
+import { AccountForm, AccountPanel } from './Account.jsx';
 import { newClient, withLogEntry } from '../model/clients.js';
 import { buildHousehold } from '../model/household.js';
 
@@ -78,7 +79,9 @@ const STEPS = [
 ];
 
 /* ── Access ───────────────────────────────────────────────────────────────── */
-function Gate({ onPass }) {
+function Gate({ onPass, onAccount, accountsOn }) {
+  // With accounts switched on, sign-in comes first and the beta code is a fallback.
+  const [mode, setMode] = useState(accountsOn ? 'signin' : 'code');
   const [code, setCode] = useState(''), [bad, setBad] = useState(false);
   const submit = (e) => {
     e.preventDefault();
@@ -87,17 +90,24 @@ function Gate({ onPass }) {
   };
   return (
     <main className="gate">
-      <form className="panel gate-card" onSubmit={submit}>
+      <div className="panel gate-card">
         <span className="brand-mark" aria-hidden="true">富</span>
-        <h1>Fusion planner</h1>
-        <p className="muted">Private beta. Enter the access code from your invitation.</p>
-        <label className="fld" htmlFor="gate-code"><span className="field-label">Access code</span>
-          <input id="gate-code" type="password" autoComplete="off" value={code} onChange={(e) => { setCode(e.target.value); setBad(false); }} aria-invalid={bad} /></label>
-        {bad && <p className="error" role="alert">That code was not recognised. Check for extra spaces and capital letters.</p>}
-        <button className="btn btn-primary btn-block" type="submit">Continue</button>
-        <p className="small muted">No code? <a href="/contact/">Ask for an invitation</a>.</p>
+        <h1>{mode === 'register' ? 'Create your account' : mode === 'signin' ? 'Sign in to Fusion' : 'Fusion planner'}</h1>
+        {mode === 'code' ? <form onSubmit={submit} className="account-form">
+          <p className="muted">Private beta. Enter the access code from your invitation.</p>
+          <label className="fld" htmlFor="gate-code"><span className="field-label">Access code</span>
+            <input id="gate-code" type="password" autoComplete="off" value={code} onChange={(e) => { setCode(e.target.value); setBad(false); }} aria-invalid={bad} /></label>
+          {bad && <p className="error" role="alert">That code was not recognised. Check for extra spaces and capital letters.</p>}
+          <button className="btn btn-primary btn-block" type="submit">Continue</button>
+          {accountsOn ? <p className="small muted"><button type="button" className="link" onClick={() => setMode('signin')}>Sign in with an account instead</button></p>
+            : <p className="small muted">No code? <a href="/contact/">Ask for an invitation</a>.</p>}
+        </form> : <>
+          <p className="muted">{mode === 'register' ? 'Free. Your plan level is kept on your account; your planning answers stay on this device.' : 'Use the email and password you registered with.'}</p>
+          <AccountForm mode={mode} onMode={setMode} idPrefix="gate" onDone={onAccount} />
+          <p className="small muted"><button type="button" className="link" onClick={() => setMode('code')}>Have a beta code?</button></p>
+        </>}
         <p className="small muted app-foot">Fusion 富生 {VERSION_LABEL}</p>
-      </form>
+      </div>
     </main>
   );
 }
@@ -301,7 +311,7 @@ function DetailsView({ plan, setAnswer, tier, onReport }) {
 }
 
 /* ── Profile ──────────────────────────────────────────────────────────────── */
-function ProfileView({ answers, setAnswer, onRestart, tier, ownTier, onTier, onPreview }) {
+function ProfileView({ answers, setAnswer, onRestart, tier, ownTier, onTier, onPreview, account, onAccount }) {
   const { age } = ageFrom(answers.birthYear, answers.birthMonth);
   return (
     <>
@@ -324,6 +334,7 @@ function ProfileView({ answers, setAnswer, onRestart, tier, ownTier, onTier, onP
         </div>
         <p className="small muted">Saved on this device only. Clearing your browser data removes it.</p>
       </section>
+      <AccountPanel account={account} onAccount={onAccount} />
       <PreviewSwitch tier={tier} ownTier={ownTier} onPreview={onPreview} />
       <UpgradeCode tier={ownTier} onTier={onTier} />
     </>
@@ -352,6 +363,25 @@ export default function GuidedApp() {
   // `ownTier` is what this device has unlocked. `preview` lets Workspace and Adviser users look at a
   // lower plan; it lasts until the page is reloaded and never changes saved plans or client files.
   const [ownTier, setTier] = useState(currentTier);
+  // Account (proof of concept). undefined while checking with the server.
+  const [account, setAccountState] = useState(undefined);
+  const [welcome, setWelcome] = useState(() => new URLSearchParams(window.location.search).get('welcome') === 'paid');
+  const applyAccount = (acc) => {
+    setAccountState(acc);
+    // The server has just set (or cleared) the tier cookie; combine it with any beta code.
+    const t = currentTier();
+    setTier(t);
+    return t;
+  };
+  useEffect(() => {
+    let live = true;
+    fetchAccount().then((acc) => { if (live) applyAccount(acc); });
+    return () => { live = false; };
+  }, []);
+  useEffect(() => {
+    if (!welcome) return;
+    const u = new URL(window.location.href); u.searchParams.delete('welcome'); window.history.replaceState(null, '', u.pathname + u.search);
+  }, [welcome]);
   const [preview, setPreview] = useState(null);
   const tier = preview && PLAN_RANK[preview] < PLAN_RANK[ownTier] ? preview : ownTier;
   // Adviser: `book` holds the client files; `clientId` is the open one (null = the adviser's own plan).
@@ -381,7 +411,16 @@ export default function GuidedApp() {
   const changed = WHAT_IF_KEYS.filter((k) => tried[k] !== undefined && tried[k] !== answers[k]).length;
   const plan = useMemo(() => (done ? (changed ? buildPlan({ ...calc, ...tried }, now) : base) : null), [calc, tried, done, base, changed, now]);
 
-  if (!ownTier) return <Gate onPass={(t) => { setTier(t); if (t === 'pro') setTab('clients'); }} />;
+  if (!ownTier && account === undefined) return <main className="gate" aria-busy="true"><p className="muted">Loading…</p></main>;
+  if (!ownTier) {
+    const afterSignIn = (t) => {
+      const next = new URLSearchParams(window.location.search).get('next');
+      if (next && /^\/checkout\/(\?|$)/.test(next)) { window.location.assign(next); return; } // back to the checkout they came from
+      if (t === 'pro') setTab('clients');
+    };
+    return <Gate accountsOn={!!account?.available} onPass={(t) => { setTier(t); afterSignIn(t); }}
+      onAccount={(user) => afterSignIn(applyAccount({ available: true, signedIn: true, user }))} />;
+  }
 
   const setAnswer = (patch) => setState((s) => ({ ...s, answers: { ...s.answers, ...patch }, tried: {} }));
   const setTried = (fn) => setState((s) => ({ ...s, tried: typeof fn === 'function' ? fn(s.tried) : fn }));
@@ -453,12 +492,13 @@ export default function GuidedApp() {
         <div className={`wrap ${work && showTabs ? 'layout' : ''}`}>
           {work && showTabs && <nav className="side-nav" aria-label="Planner sections">{WORK_NAV.map(navButton)}</nav>}
           <main className={`main ${showTabs ? '' : 'no-tabs'}`} id="main">
+          {welcome && <p className="preview-note ok-note no-print" role="status"><span>Test payment recorded. Your plan is now <b>{tierName(ownTier)}</b>. No money was taken.</span> <button type="button" className="link" onClick={() => setWelcome(false)}>Dismiss</button></p>}
           {tier !== ownTier && <p className="preview-note no-print" role="status"><span>Previewing the <b>{tierName(tier)}</b> plan{client ? ` with ${client.name}'s file open` : ''}.</span> <button type="button" className="link" onClick={() => setPreview(null)}>Back to {tierName(ownTier)}</button></p>}
           {view === 'plan' && <PlanView plan={plan} moves={moves} changed={changed} onReset={() => setTried({})} go={setTab} />}
           {view === 'moves' && <MovesView base={base} plan={plan} moves={moves} tried={tried} setTried={setTried} answers={calc} />}
           {view === 'details' && <DetailsView plan={plan} tier={tier} onReport={() => setTab('report')} setAnswer={(p) => setState((s) => ({ ...s, answers: { ...s.answers, ...p } }))} />}
           {view === 'compare' && <CompareView tier={tier} base={base} plan={plan} answers={calc} tried={tried} changed={changed} scenarios={scenarios || []} setScenarios={setScenarios} setTried={setTried} now={now} go={setTab} />}
-          {view === 'profile' && <ProfileView answers={answers} setAnswer={setAnswer} onRestart={restart} tier={tier} ownTier={ownTier} onTier={upgrade} onPreview={(t) => { setPreview(t === ownTier ? null : t); if (tab === 'clients' || tab === 'report') setTab('plan'); }} />}
+          {view === 'profile' && <ProfileView answers={answers} setAnswer={setAnswer} onRestart={restart} tier={tier} ownTier={ownTier} onTier={upgrade} account={account} onAccount={applyAccount} onPreview={(t) => { setPreview(t === ownTier ? null : t); if (tab === 'clients' || tab === 'report') setTab('plan'); }} />}
           {view === 'report' && <ReportView plan={plan} base={base} answers={calc} scenarios={scenarios || []} now={now} tier={tier} client={client} adviser={book.adviser}
             patchClient={patchClient} onIssue={issueReport} onBack={() => setTab('details')} />}
           {view === 'overview' && <OverviewView answers={calc} plan={plan} moves={moves} changed={changed} onReset={() => setTried({})} scenarios={scenarios || []} go={setTab} now={now} />}

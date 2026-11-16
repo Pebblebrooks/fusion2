@@ -349,3 +349,11 @@ table.waterfall td { font-size: 16px; } table.waterfall tr.total th, table.water
 .table-scroll { max-width: 100%; }
 .app > * { min-width: 0; }  /* flex children must be allowed to shrink, or a wide table stretches the page */
 .app > .wrap, .app > header, .app > footer { width: 100%; }
+
+/* ── Accounts ─────────────────────────────────────────────────────────────── */
+.account-form { display: grid; gap: 14px; }
+.gate-card .account-form .small { text-align: center; }
+.acct { margin: 0 0 16px; display: grid; gap: 8px; font-size: 15px; }
+.acct div { display: grid; grid-template-columns: 80px 1fr; gap: 12px; }
+.acct dt { color: var(--muted); } .acct dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.ok-note { border-color: var(--ok); background: var(--ok-tint); }

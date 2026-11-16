@@ -29,7 +29,7 @@ function initHeader() {
   if (signIn && signOut) {
     signIn.hidden = signedIn; signOut.hidden = !signedIn;
     // Saved plans stay on the device; only the access is cleared. /logout clears the cookies.
-    signOut.addEventListener('click', () => { try { localStorage.removeItem('fusion_gate_passed'); localStorage.removeItem('fusion_plan'); } catch { /* private mode */ } });
+    signOut.addEventListener('click', () => { try { localStorage.removeItem('fusion_gate_passed'); localStorage.removeItem('fusion_plan'); localStorage.removeItem('fusion_beta_tier'); } catch { /* private mode */ } });
   }
   const toggle = $('.nav-toggle', header);
   const setOpen = (open) => {
@@ -173,6 +173,25 @@ function initCheckout() {
   const trial = params.get('trial') === '1' && PLANS[planKey].trialDays > 0;
   const status = $('#checkout-status');
   const submit = $('button[type="submit"]', form);
+  // Accounts (proof of concept): when the server has accounts, checkout is simulated and
+  // needs a signed-in account. Otherwise the page records a plan request as before.
+  let account = { available: false, signedIn: false };
+  const payLabel = () => (account.available ? 'Pay (test, no money taken)' : trial ? 'Start free trial' : 'Continue to secure payment');
+  const applyAccount = () => {
+    $('[data-test-banner]').hidden = !account.available;
+    $('[data-signin-needed]').hidden = !account.available || account.signedIn;
+    $('[data-signin-link]').href = `/app/?next=${encodeURIComponent(location.pathname + location.search)}`;
+    if (account.available) {
+      $('[data-pay-note]').textContent = 'Test checkout: no card details are collected and nothing is charged.';
+      $('[data-email-hint]').textContent = account.signedIn ? 'The plan is added to this account.' : 'Sign in first: the plan is added to your account.';
+    }
+    if (account.signedIn && account.user) { form.email.value = account.user.email; form.email.readOnly = true; }
+    submit.textContent = payLabel();
+  };
+  fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => { if (d) { account = { available: true, signedIn: !!d.signedIn, user: d.user }; applyAccount(); } })
+    .catch(() => { /* accounts not available: keep the plan-request flow */ });
 
   const syncUrl = () => {
     const u = new URL(location.href);
@@ -203,8 +222,9 @@ function initCheckout() {
     if (trial) $('[data-sum-trial]').textContent = `${p.trialDays}-day free trial, then S$${fmt(amount)} / ${interval === 'year' ? 'year' : 'month'} unless you cancel.`;
     $('[data-sum-saving]').textContent = interval === 'year' ? `You save ${savingsPct(planKey)}% versus monthly billing.` : 'Switch to yearly billing to save.';
     $('[data-sum-features]').innerHTML = p.highlights.map((f) => `<li>${f}</li>`).join('');
-    submit.textContent = trial ? 'Start free trial' : 'Continue to secure payment';
+    submit.textContent = payLabel();
     syncUrl();
+    if (account.available) applyAccount();
   };
 
   form.addEventListener('change', (e) => {
@@ -229,6 +249,18 @@ function initCheckout() {
         body: JSON.stringify(order),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.ok && data.simulated) {
+        form.hidden = true; $('[data-test-banner]').hidden = true;
+        $('[data-done-title]').textContent = 'Test payment recorded';
+        $('[data-done-text]').textContent = `${data.user.email} is now on the ${data.user.planName} plan. This was a simulated payment: no money was taken.`;
+        $('[data-done-open]').href = data.url || '/app/';
+        $('[data-checkout-done]').hidden = false;
+        return;
+      }
+      if (data.status === 'sign_in') {
+        setStatus(status, 'error', `Please <a href="/app/?next=${encodeURIComponent(location.pathname + location.search)}">sign in or create an account</a> first. Nothing has been charged.`);
+        return;
+      }
       if (res.ok && data.url) { location.assign(data.url); return; } // Stripe-hosted payment page
       if (data.status !== 'not_configured') throw new Error(data.message || 'Checkout unavailable');
       // Payments are not switched on yet: record the request so we can follow up.

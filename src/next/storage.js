@@ -6,6 +6,9 @@
 import { encodePlanState } from '../state/shareLink.js';
 import { toEngineInputs } from '../model/plan.js';
 import { cleanState, cleanBook } from '../model/clients.js';
+import { migrateBetaTier, betaTier, setBetaTier, higherTier } from '../entitlements/localTier.js';
+
+migrateBetaTier(); // once per device: codes entered before accounts existed
 
 export { cleanState };
 
@@ -24,22 +27,25 @@ export const savePlan = (state) => set(PLAN_KEY, JSON.stringify({ v: 1, savedAt:
 export const clearPlan = () => set(PLAN_KEY, null);
 
 /** Access: the Worker's tier cookie, or a code entered earlier on this device. */
+/**
+ * Plan level on this device: the higher of the account's tier (cpf_tier_v1 cookie, set by
+ * the server) and any code entered here (fusion_beta_tier). null = not signed in, no code.
+ */
 export const currentTier = () => {
   let cookieTier = null;
   try {
     const m = document.cookie.match(/(?:^|;\s*)cpf_tier_v1=([^;]+)/);
     if (m && ['lite', 'plus', 'pro'].includes(m[1])) cookieTier = m[1];
   } catch { /* no cookies */ }
-  const stored = get('fusion_plan');
   const passed = get('fusion_gate_passed') === '1';
   if (!cookieTier && !passed) return null;
-  const rank = { lite: 0, plus: 1, pro: 2 };
-  const storedTier = rank[stored] !== undefined ? stored : 'lite';
-  return cookieTier && rank[cookieTier] > rank[storedTier] ? cookieTier : storedTier;
+  const code = passed ? betaTier() : 'lite';
+  return cookieTier ? higherTier(cookieTier, code) : code;
 };
 export const rememberTier = (tier) => {
   set('fusion_gate_passed', '1');
-  set('fusion_plan', tier === 'lite' ? null : tier);
+  setBetaTier(tier);
+  set('fusion_plan', tier === 'lite' ? null : tier); // read by the classic planner
 };
 
 export const getTheme = () => (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
@@ -69,6 +75,32 @@ export const download = (name, text, type = 'text/plain') => {
 
 /** Sign out: forget the access code on this device (saved plans and client files stay), then clear the cookies. */
 export const signOut = () => {
-  set('fusion_gate_passed', null); set('fusion_plan', null);
+  set('fusion_gate_passed', null); set('fusion_plan', null); set('fusion_beta_tier', null);
   window.location.assign('/logout');
+};
+
+/* ── Accounts (proof of concept) ─────────────────────────────────────────────
+   The server holds the account and its plan; it also sets the readable cpf_tier_v1
+   cookie, which currentTier() above combines with any beta code on this device. */
+const post = async (path, body = {}) => {
+  try {
+    const res = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    return { status: res.status, ...data };
+  } catch { return { ok: false, status: 0, message: 'No connection. Please try again.' }; }
+};
+/** { available, signedIn, user } — available is false when the server has no accounts set up (or is unreachable). */
+export const fetchAccount = async () => {
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' });
+    if (res.status === 503 || !res.ok) return { available: false, signedIn: false, user: null };
+    const data = await res.json();
+    return { available: true, signedIn: !!data.signedIn, user: data.user || null };
+  } catch { return { available: false, signedIn: false, user: null }; }
+};
+export const accountApi = {
+  register: (email, password) => post('/api/auth/register', { email, password }),
+  login: (email, password) => post('/api/auth/login', { email, password }),
+  cancelPlan: () => post('/api/account/cancel'),
+  deleteAccount: (password) => post('/api/account/delete', { password }),
 };

@@ -111,6 +111,9 @@ sent by the browser.
 | `src/next/Adviser.jsx` | Adviser: client book (`ClientsView`) and meeting mode (`MeetingView`). |
 | `src/model/clients.js` | Pure client-book data handling: `cleanBook` (every load and restore passes through it), review status, search and sort, advice record. Tested in `tests/clients.test.js`. |
 | `src/engine/medical.js` | Yearly medical costs and MediSave limits, shared by both engines (`medicalYear`, `ipWithdrawalLimit`, `careShieldAges`). |
+| `src/server/accounts.js` | Worker: accounts (register, sign in, me, cancel, delete, admin reset), sessions and the simulated checkout. Tables created on first use. Tested in `tests/accounts.test.js` with an in-memory database (`tests/helpers/d1.js`). |
+| `src/next/Account.jsx` | Planner: sign-in / create-account form and the Account panel under Profile. |
+| `src/entitlements/localTier.js` | Codes entered on the device (`fusion_beta_tier`), kept apart from the account tier. |
 | `src/next/ui.jsx` | Shared form controls and money/percent formatting. |
 | `src/next/Chart.jsx` | Savings chart (hand-drawn SVG, hover values, table view). |
 | `src/next/storage.js` | Saved plan (`fusion_guided_plan_v1`), access tier, theme, link into the classic planner. |

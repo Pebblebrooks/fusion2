@@ -83,6 +83,20 @@ codes that are currently inside the planner code.
 
 Update these figures each January in `src/policy/cpf2026.js` (engine) and on the website (`index.html`, `learn/index.html`).
 
+## Accounts (proof of concept)
+
+Needs, in Cloudflare:
+- D1 database `fusion2`, bound as `DB` in `wrangler.jsonc` (done). Tables are created by the Worker on first use.
+- Secret `SESSION_SECRET` (16+ random characters) on the `fusion2` Worker.
+
+Optional secrets and variables:
+- `ADMIN_TOKEN`: switches on the admin password reset:
+  `curl -X POST https://fusion2.ehtan2022.workers.dev/api/admin/reset-password -H "Authorization: Bearer <ADMIN_TOKEN>" -H "content-type: application/json" -d '{"email":"user@example.com","password":"a new password"}'`
+- `PBKDF2_ITERATIONS`: password hashing cost for new passwords (default 100000). Lower it (for example 20000) only if sign-in fails with Cloudflare's CPU-limit error on the free plan.
+
+Payments are simulated: checkout records a test payment and sets the plan. No payment provider is connected.
+For local testing, put `SESSION_SECRET=...` in `.dev.vars` (git-ignored) before `npm run build`.
+
 ## Versions and releases
 
 1. Raise `version` in `package.json` and add an entry at the top of `CHANGELOG.md` (the test suite fails if they differ).

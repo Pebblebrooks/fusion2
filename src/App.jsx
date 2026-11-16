@@ -47,6 +47,7 @@ import { computeXIRR } from './engine/xirr.js';
 import { DEFAULT_INPUTS, INPUT_LABELS, LIFE_EVENT_DEFAULTS_MOD, SCENARIO_LABELS, SPOUSE_DEFAULT_INPUTS, buildSafeInputs, migrateProfile } from './inputs/defaults.js';
 import { decodePlanState, encodePlanState } from './state/shareLink.js';
 import { GATE_PASSWORDS, TIER_PASSWORDS } from './entitlements/gate.js';
+import { migrateBetaTier, betaTier, setBetaTier, higherTier } from './entitlements/localTier.js';
 import { LITE_PRESET_IDS, PLAN_RANK, PLAN_REQUIRED_TABS, SECTION_PLAN, TIER_BADGE, TIER_CONFIG, sectionIsLocked, tabIsLocked, tierName } from './entitlements/tiers.js';
 import { formatCurrency } from './lib/format.js';
 import { STYLES } from './ui/styles.js';
@@ -4694,6 +4695,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
   const upgradePlan = (newPlan) => {
     setPlan(newPlan);
     try { localStorage.setItem('fusion_plan', newPlan); } catch { /* noop */ }
+    setBetaTier(higherTier(newPlan, betaTier())); // upgrades here come from codes
   };
   const downgradePlan = (newPlan) => {
     setPlan(newPlan);
@@ -4701,6 +4703,7 @@ function CPFPlannerApp({ freshGateEntry = false }) {
       if (newPlan === 'lite') localStorage.removeItem('fusion_plan');
       else localStorage.setItem('fusion_plan', newPlan);
     } catch { /* noop */ }
+    setBetaTier(newPlan);
   };
   const [postWizardTipDismissed, setPostWizardTipDismissed] = useState(() => {
     try { return !!localStorage.getItem('cpf_planner_wizard_tip_done'); }
@@ -30757,8 +30760,12 @@ export default function App() {
       // Sync the plan to localStorage. Take the HIGHER of the Worker-issued
       // tier and any plan already stored (preserves prior UpgradeModal upgrades).
       try {
+        // Account tier (cookie, from the server) combined with codes entered on this device.
+        // fusion_plan is NOT read back here: it already holds an earlier account tier and would
+        // keep a cancelled plan alive (see src/entitlements/localTier.js).
+        migrateBetaTier();
         const TIER_RANK = { lite: 0, plus: 1, pro: 2 };
-        const stored    = localStorage.getItem('fusion_plan') ?? 'lite';
+        const stored    = betaTier();
         const effective = (TIER_RANK[stored] ?? 0) >= (TIER_RANK[workerTier] ?? 0)
           ? stored : workerTier;
         localStorage.setItem('fusion_gate_passed', '1');
@@ -30784,6 +30791,7 @@ export default function App() {
         onUnlock={(tier) => {
           try {
             localStorage.setItem('fusion_gate_passed', '1');
+            setBetaTier(tier);
             // 'lite' is represented by key-absence, matching downgradePlan's convention.
             if (tier === 'pro')       localStorage.setItem('fusion_plan', 'pro');
             else if (tier === 'plus') localStorage.setItem('fusion_plan', 'plus');

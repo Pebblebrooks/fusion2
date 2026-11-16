@@ -6,6 +6,17 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.3.0 — 16 Nov 2026
+Accounts, proof of concept. Engine and planner screens unchanged.
+- **Accounts:** create an account and sign in with email and password. Stored in Cloudflare D1 (`fusion2`); passwords hashed with PBKDF2-SHA-256 and a per-user salt; signed, HttpOnly session cookie for 30 days; 15-minute lock after 10 wrong passwords.
+- **Plan on the server:** the account's plan is set by the server and sent to both planners in the `cpf_tier_v1` cookie. Beta and upgrade codes still work; the higher of the two applies.
+- **Simulated checkout:** with accounts on, the checkout page is marked as a test, needs a signed-in account, records a test payment and sets the plan. No card details are collected and no money is taken.
+- **Profile → Account:** email and plan, change plan, cancel plan, delete account (password required; removes the email, plan and payment records).
+- **Admin password reset:** `POST /api/admin/reset-password`, only when an `ADMIN_TOKEN` secret is set.
+- Codes entered on a device are now kept apart from the account's plan (`fusion_beta_tier`), so a cancelled plan does not stay unlocked after opening the classic planner. Codes entered before this version are carried over.
+- Privacy policy: new section on accounts and the sign-in cookie.
+- Without the database binding or `SESSION_SECRET`, everything behaves as in 3.2.0.
+
 ## 3.2.0 — 16 Nov 2026
 - **Healthcare (Workspace):** MediShield Life by age, Integrated Shield private part, CareShield Life and medical bills; MediSave at 65, the age it runs out and the cash needed.
 - **Drawdown (Workspace):** how fast to spend the Ordinary Account, an amount to keep back, cash to take at 55, and what would be left for family at 75 to 95.

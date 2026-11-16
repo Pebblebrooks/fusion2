@@ -16,5 +16,9 @@
     // without reaching the Worker — so the Worker's own routes must run first.
     "run_worker_first": ["/app/*", "/api/*", "/logout", "/healthz"]
   },
+  // Accounts (proof of concept). Tables are created by the Worker on first use.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "fusion2", "database_id": "495de0ab-896f-42af-8ab8-0088fdeb9d12" }
+  ],
   "observability": { "enabled": true }
 }

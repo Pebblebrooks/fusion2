@@ -22,6 +22,8 @@
     <div class="wrap">
       <div class="checkout">
         <div>
+          <div class="notice info" data-test-banner hidden><strong>Test payment.</strong> This preview simulates checkout: no card is charged and no money is taken. Paying sets the plan on your Fusion account.</div>
+          <div class="notice" data-signin-needed hidden><strong>Sign in first.</strong> Plans are kept on your Fusion account. <a data-signin-link href="/app/">Sign in or create a free account</a>, and you will come straight back here.</div>
           <form class="panel" id="checkout-form" novalidate>
             <fieldset class="field">
               <legend>Plan</legend>
@@ -50,7 +52,7 @@
             <div class="field">
               <label for="co-email">Email</label>
               <input class="input" id="co-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
-              <p class="hint">Your receipt and sign-in link are sent here.</p>
+              <p class="hint" data-email-hint>Your receipt and sign-in link are sent here.</p>
             </div>
             <div class="field">
               <label for="co-name">Name <span class="muted">(optional)</span></label>
@@ -61,15 +63,15 @@
 
             <button class="btn btn-primary btn-lg btn-block" type="submit">Continue to secure payment</button>
             <p class="form-status" id="checkout-status" role="status" aria-live="polite"></p>
-            <p class="small muted" style="margin-top:14px">Payments are processed by Stripe. Fusion never sees or stores your card details.</p>
+            <p class="small muted" style="margin-top:14px" data-pay-note>Payments are processed by Stripe. Fusion never sees or stores your card details.</p>
           </form>
 
           <div class="panel" data-checkout-done hidden>
-            <h2>Thanks — you're on the list</h2>
-            <p>Online payment isn't switched on yet during the beta. We've noted your plan choice and will email <strong data-done-email></strong> with a payment link as soon as it's ready.</p>
+            <h2 data-done-title>Thanks — you're on the list</h2>
+            <p data-done-text>Online payment isn't switched on yet during the beta. We've noted your plan choice and will email <strong data-done-email></strong> with a payment link as soon as it's ready.</p>
             <p style="margin-top:12px"><strong>Nothing has been charged.</strong></p>
             <div class="btn-row" style="margin-top:20px">
-              <a class="btn btn-primary" href="/app/">Open the planner</a>
+              <a class="btn btn-primary" href="/app/" data-done-open>Open the planner</a>
               <a class="btn btn-secondary" href="/learn/">Read the CPF guide</a>
             </div>
           </div>
