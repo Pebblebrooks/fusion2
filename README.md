@@ -10,6 +10,7 @@ Cloudflare Worker.
   - Adviser opens on a client book (search, tags, review dates, overdue flag) and adds meeting mode, a review of all clients against their last report, branded reports with a recommendation and its basis, and an advice record per client. Files stay on the device, with backup and restore.
   - Preview: under Profile, Adviser users can view the planner as Guided or Workspace, and Workspace users as Guided. It lasts until the page is reloaded and changes no saved data.
   - Logo: the teal 富 mark on the website and new planner; the classic planner keeps its red seal, so the two are easy to tell apart.
+- Fusion Studio (preview, `studio` branch only): `/app/studio/` — Workspace and Adviser; the CPF life story in chapters, sharing the planner's saved plan.
 - Classic planner (all tabs): `/app/classic/` — opens from the new planner with the same plan loaded. Old share links (`/app/?p=…`) are forwarded here.
 - Checkout: `/checkout/` (records plan requests until online payment is switched on)
 

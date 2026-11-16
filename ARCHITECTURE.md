@@ -10,6 +10,7 @@ pricing/ checkout/ advisers/ learn/ faq/ contact/ privacy/ terms/
 404.html                Not-found page
 app/index.html          New planner page (Guided)      → /app/
 app/classic/index.html  Classic planner page          → /app/classic/
+app/studio/index.html   Fusion Studio page            → /app/studio/
 site/
   site.css              Website styles (fonts are self-hosted via @fontsource)
   site.js               Website behaviour: menu, pricing toggle, checkout, contact form
@@ -54,6 +55,7 @@ legacy/fusionweb-redirect/  Optional Worker that forwards the old website to the
 | `/app/` | Planner page |
 | `/app/<anything>` | Worker → planner page (deep links) |
 | `/app/classic/`, `/app/classic/<anything>` | Classic planner page |
+| `/app/studio/`, `/app/studio/<anything>` | Fusion Studio page |
 | `/app/?p=…` (also `?s=`, `?state=`) | Browser forwards to `/app/classic/` with the same query |
 | `/assets/*` | Static, cached for a year (hashed file names) |
 | `/api/checkout` | Worker. `POST` starts a payment (501 until Stripe is set up); `GET` redirects to `/checkout/` |
@@ -116,10 +118,26 @@ sent by the browser.
 | `src/entitlements/localTier.js` | Codes entered on the device (`fusion_beta_tier`), kept apart from the account tier. |
 | `src/next/ui.jsx` | Shared form controls and money/percent formatting. |
 | `src/next/Chart.jsx` | Savings chart (hand-drawn SVG, hover values, table view). |
-| `src/next/storage.js` | Saved plan (`fusion_guided_plan_v1`), access tier, theme, link into the classic planner. |
+| `src/next/storage.js` | Saved plan (`fusion_guided_plan_v1`, version 2), access tier, theme, link into the classic planner. `savePlan` keeps Studio's part unless Studio itself saves (`from: 'studio'`). |
 | `src/next/guided.css` | Planner styles. Imports `site/site.css` for tokens, buttons and type. Class names must not reuse site ones (`card`, `hero`, `steps`, `plans`, `field`, `seg`, `choice`). |
 | `src/entitlements/gate.js` | Beta access codes shared by both planners. Client-visible; replace with server sign-in before launch. |
 
 Rules for this planner: one headline answer per screen; money in today's dollars unless labelled;
 CPF LIFE (for life) and Ordinary Account income (not for life) are always shown separately; each
 suggested move is measured by re-running the engine with that one change.
+
+## Fusion Studio (`src/studio/`, on the `studio` branch)
+
+Whole-life planner for Workspace and Adviser, told in chapters (Today → Building → Family → Home →
+Turning 55 → Payout → Later life → Legacy → My plan). It shares the saved plan with the new planner;
+both pick up each other's changes through the browser's `storage` event and never save a plan they
+just received, so open tabs cannot re-save each other in a loop.
+
+| File | Job |
+|---|---|
+| `src/model/studio.js` | Pure functions: chapter list, `cleanStudio` (Studio's part of the plan: chapter, saved moves), and one scene model per chapter (`todayScene`). Figures come from `buildPlan`. Tested in `tests/studio.test.js`. |
+| `src/studio/StudioApp.jsx` | Shell (header, life timeline, access check) and the chapter screens. |
+| `src/studio/studio.css` | Studio styles; imports the planner's. Classes are prefixed `st-`. |
+
+Rules for every scene: one plain question; one large answer with one sentence of meaning; at most one
+chart; up to three things to change; the working behind "Show how" with the official CPF terms.

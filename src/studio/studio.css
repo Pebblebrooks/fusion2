@@ -1,0 +1,85 @@
+/* Fusion Studio (/app/studio/). Builds on the planner's styles (tokens, panels, fields, buttons)
+   and adds only Studio's own pieces, all prefixed st- so nothing collides with site.css or guided.css. */
+@import "../next/guided.css";
+
+.studio .st-name { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: var(--muted); margin-left: -6px; }
+.studio .st-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Life timeline: one step per chapter, in life order */
+.st-journey { background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: thin; }
+.st-journey ol { list-style: none; display: flex; gap: 0; margin: 0 auto; padding-top: 12px; padding-bottom: 12px; min-width: max-content; }
+.st-journey li { position: relative; flex: 1 0 104px; }
+.st-journey li + li::before { content: ""; position: absolute; top: 25px; left: -50%; right: 50%; height: 2px; background: var(--border); }
+.st-journey button { position: relative; z-index: 1; width: 100%; display: grid; justify-items: center; gap: 4px; padding: 6px 4px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.st-journey button:hover:not(:disabled) { background: var(--sunken); }
+.st-journey button:disabled { cursor: default; }
+.st-dot { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 600 13px var(--font-display); background: var(--surface); border: 2px solid var(--border-strong); color: var(--muted); }
+.st-ch { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.st-when { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.st-journey li.on .st-dot { background: var(--brand-solid); border-color: var(--brand-solid); color: #FFFFFF; }
+.st-journey li.on .st-ch { color: var(--brand); }
+.st-journey li.soon .st-ch { color: var(--muted); font-weight: 500; }
+.st-journey li.soon .st-dot { border-style: dashed; }
+
+/* A scene: question, answer, levers, show how, next */
+.st-main { max-width: 860px; padding-top: 32px; padding-bottom: 64px; display: flex; flex-direction: column; gap: 20px; }
+.st-scene { display: flex; flex-direction: column; gap: 20px; }
+.st-scene h1 { font-size: clamp(30px, 4.6vw, 46px); margin: 4px 0 0; text-wrap: balance; }
+.st-answer { display: grid; gap: 14px; }
+.st-big { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.st-big .fig { font-size: clamp(40px, 7vw, 64px); font-weight: 700; line-height: 1; color: var(--brand); }
+.st-unit { font-size: 18px; color: var(--muted); }
+.st-sub { margin: 0; color: var(--muted); }
+.st-meaning { margin: 4px 0 0; font-size: 18px; line-height: 1.5; max-width: 60ch; }
+.st-meaning b { font-weight: 600; }
+
+.st-bar { display: flex; gap: 2px; height: 28px; }
+.st-bar .seg { display: block; height: 100%; min-width: 3px; }
+.st-bar .seg:first-child { border-radius: 6px 0 0 6px; }
+.st-bar .seg:last-child { border-radius: 0 6px 6px 0; }
+.st-bar .seg:first-child:last-child { border-radius: 6px; }
+.st-bar .s1 { background: var(--s1); } .st-bar .s2 { background: var(--s2); } .st-bar .s3 { background: var(--s3); }
+.st-key { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.st-key li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: baseline; column-gap: 10px; }
+.st-key-name { font-size: 15px; }
+.st-key b { font-family: var(--font-display); font-size: 17px; font-variant-numeric: tabular-nums; text-align: right; }
+.st-key em { grid-column: 2 / -1; font-style: normal; font-size: 13px; color: var(--muted); }
+
+.st-pill { justify-self: start; display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0; padding: 8px 14px; border-radius: 10px; font-size: 15px; }
+.st-pill b { font-size: 20px; }
+.st-pill.gap { background: var(--warn-tint); color: var(--ink); }
+.st-pill.gap b { color: var(--warn); }
+.st-pill.ok { background: var(--ok-tint); color: var(--ink); }
+.st-pill.ok b { color: var(--ok); }
+
+.st-levers h2 { margin-bottom: 4px; }
+.st-lever-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.st-lever-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.st-balances { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+.st-how { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.st-how summary, .st-balances summary { cursor: pointer; font-weight: 600; color: var(--brand); min-height: 44px; display: flex; align-items: center; }
+.st-how summary { padding: 0 24px; }
+.st-how-body { padding: 0 24px 20px; }
+.st-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.st-table th, .st-table td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: right; }
+.st-table th:first-child { text-align: left; font-weight: 500; }
+.st-table thead th { font-size: 13px; color: var(--muted); font-weight: 600; }
+.st-table .st-total th, .st-table .st-total td { font-weight: 700; border-bottom: 0; }
+.st-notes { margin: 16px 0 0; padding-left: 18px; display: grid; gap: 8px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+.st-next { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.st-next .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.st-sample { margin: 0; padding: 12px 16px; border-radius: 10px; background: var(--warn-tint); border: 1px solid var(--warn-border); font-size: 15px; }
+.st-sample a { color: var(--ink); font-weight: 600; }
+.st-locked h1 { font-size: clamp(24px, 3vw, 32px); margin-bottom: 8px; }
+.st-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.st-foot { padding-bottom: 32px; }
+
+@media (max-width: 760px) {
+  .studio .st-back { display: none; }
+  .st-lever-grid, .st-lever-grid.three { grid-template-columns: minmax(0, 1fr); }
+  .st-how summary { padding: 0 16px; }
+  .st-how-body { padding: 0 16px 16px; }
+  .st-journey li { flex-basis: 84px; }
+}

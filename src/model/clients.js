@@ -3,13 +3,14 @@
  *
  * book   = { adviser: { name, firm, logo, accent }, clients: [client] }
  * client = { id, name, notes, updated, state, tags[], reviewDate, recommendation, basis, log[] }
- *   state — the same shape as a personal plan: { answers, tried, done, scenarios }
+ *   state — the same shape as a personal plan: { answers, tried, done, scenarios, studio }
  *   log   — advice record: one entry each time a report is issued (newest first, capped)
  * Everything read from storage or a backup file passes through cleanBook, so old files
  * (before tags, review dates and the advice record existed) still open.
  */
 import { DEFAULT_ANSWERS, buildPlan } from './plan.js';
 import { buildHousehold } from './household.js';
+import { cleanStudio } from './studio.js';
 import { RULES_VERSION } from '../policy/cpf2026.js';
 
 export const MAX_LOG = 50, MAX_TAGS = 6, MAX_LOGO_CHARS = 280000; // about 200 KB of image as a data URL
@@ -25,6 +26,7 @@ export const cleanState = (state) => {
     answers, done: !!state?.done,
     tried: state?.tried && typeof state.tried === 'object' ? state.tried : {},
     scenarios: Array.isArray(state?.scenarios) ? state.scenarios.filter((s) => s && typeof s.name === 'string' && s.tried && typeof s.tried === 'object').slice(0, 4) : [],
+    studio: cleanStudio(state?.studio), // Fusion Studio's chapter and saved moves (plan version 2)
   };
 };
 

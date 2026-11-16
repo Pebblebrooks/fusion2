@@ -16,6 +16,7 @@
  *   /api/auth/*, /api/account/*, /api/admin/*   accounts (see src/server/accounts.js)
  *   /app/<anything> planner deep links → the planner page (single-page app)
  *   /app/classic/<anything>         → the classic planner page
+ *   /app/studio/<anything>          → Fusion Studio (Workspace and Adviser)
  *   anything else   404 page (from the assets "not_found_handling" setting)
  *
  * Accounts (proof of concept): email + password in D1, signed session cookie,
@@ -113,9 +114,11 @@ export default {
 
     // Planner deep links (e.g. /app/plan) load the planner page.
     if ((path === '/app' || path.startsWith('/app/')) && request.method === 'GET' && !path.slice(5).includes('.')) {
-      // /app/classic/... is the classic planner; everything else under /app/ is the new one.
-      const classic = path === '/app/classic' || path.startsWith('/app/classic/');
-      const appIndex = new URL(classic ? '/app/classic/' : '/app/', url);
+      // /app/classic/... is the classic planner, /app/studio/... is Fusion Studio;
+      // everything else under /app/ is the new planner.
+      const under = (p) => path === p || path.startsWith(`${p}/`);
+      const page = under('/app/classic') ? '/app/classic/' : under('/app/studio') ? '/app/studio/' : '/app/';
+      const appIndex = new URL(page, url);
       appIndex.search = url.search;
       return withSecurityHeaders(await env.ASSETS.fetch(new Request(appIndex, request)));
     }

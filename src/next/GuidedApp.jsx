@@ -5,11 +5,11 @@
  *   Plan (the answer) · Moves (what to do next) · Details (how the number is built) · Profile (your answers)
  * All figures come from src/model/plan.js. Nothing is sent anywhere; the plan is saved on this device.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildPlan, findMoves, DEFAULT_ANSWERS, ageFrom, RSTU_RELIEF_CAP } from '../model/plan.js';
 import { tierForAnyCode } from '../entitlements/gate.js';
 import { tierName, PLAN_RANK } from '../entitlements/tiers.js';
-import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink, loadBook, saveBook, newId, signOut, fetchAccount } from './storage.js';
+import { loadPlan, savePlan, clearPlan, currentTier, rememberTier, getTheme, setTheme, classicLink, loadBook, saveBook, newId, signOut, fetchAccount, PLAN_KEY } from './storage.js';
 import { VERSION_LABEL } from '../version.js';
 import SavingsChart from './Chart.jsx';
 import { IncomeBar, OverviewView, HouseholdView, PropertyView, TopUpsView, ConfidenceView, HealthcareView, DrawdownView, SolveView } from './Modules.jsx';
@@ -394,8 +394,23 @@ export default function GuidedApp() {
   const { answers, tried, done, scenarios } = state;
   const client = clientId ? book.clients.find((c) => c.id === clientId) : null;
 
+  // Fusion Studio (or another planner tab) saved the personal plan: show it here too. It is not
+  // saved straight back (fromOtherTab), so two open tabs cannot keep re-saving each other's plan.
+  const fromOtherTab = useRef(false);
+  useEffect(() => {
+    if (clientId) return undefined;
+    const onStorage = (e) => {
+      if (e.key !== PLAN_KEY) return;
+      const next = loadPlan();
+      if (next?.done) { fromOtherTab.current = true; setState(next); }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [clientId]);
+
   // Autosave: to the open client file, or to the personal plan.
   useEffect(() => {
+    if (fromOtherTab.current) { fromOtherTab.current = false; return; }
     if (!done) return;
     if (clientId) setBook((b) => ({ ...b, clients: b.clients.map((c) => (c.id === clientId ? { ...c, state, updated: new Date().toISOString() } : c)) }));
     else savePlan(state);

@@ -22,7 +22,8 @@ test('new fields survive a backup and restore', () => {
   c = withLogEntry(c, clientPlan(c, NOW), buildHousehold(c.state.answers, NOW), 'A. Tan', '2026-11-16T02:00:00.000Z');
   const book = { adviser: { name: 'A. Tan', firm: 'F', logo: 'data:image/png;base64,AAAA', accent: '#123abc' }, clients: [c] };
   const back = cleanBook(JSON.parse(JSON.stringify({ kind: 'fusion-clients', v: 2, ...book })));
-  assert.deepEqual(back, book);
+  // Restoring adds the parts a newer version keeps for every plan (Studio's chapter and moves); nothing is lost.
+  assert.deepEqual(back, { ...book, clients: [{ ...c, state: { ...c.state, studio: { chapter: 'today', moves: [] } } }] });
   assert.equal(back.clients[0].log[0].recommendation, 'Top up S$8,000 a year.');
   assert.ok(back.clients[0].log[0].income > 0);
 });

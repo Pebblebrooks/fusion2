@@ -35,6 +35,15 @@ test('planner deep links serve the planner page and keep the query', async () =>
   assert.equal(served.at(-1), '/app/?p=abc');
 });
 
+test('studio links serve the studio page and keep the query', async () => {
+  await call('/app/studio');
+  assert.equal(served.at(-1), '/app/studio/');
+  await call('/app/studio/today?x=1');
+  assert.equal(served.at(-1), '/app/studio/?x=1');
+  await call('/app/studios'); // not Studio: a planner deep link
+  assert.equal(served.at(-1), '/app/');
+});
+
 test('classic planner links serve the classic page and keep the query', async () => {
   await call('/app/classic?p=abc');
   assert.equal(served.at(-1), '/app/classic/?p=abc');

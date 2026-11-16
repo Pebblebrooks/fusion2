@@ -23,6 +23,7 @@ const pages = {
   notFound: r('404.html'),
   app:      r('app/index.html'),
   appClassic: r('app/classic/index.html'),
+  appStudio: r('app/studio/index.html'),
 };
 
 // Version shown in the app: package.json version + the commit being built + build date.

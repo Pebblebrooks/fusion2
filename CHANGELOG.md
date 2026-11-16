@@ -6,6 +6,14 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.4.0-studio.1 — 16 Nov 2026
+Fusion Studio, Phase 0 (preview on the `studio` branch only; not on the live site). No change to calculations.
+- **Fusion Studio** at `/app/studio/`, for Workspace and Adviser: your CPF life told in chapters (Today, Building, Family, Home, Turning 55, Payout, Later life, Legacy, My plan). Guided users and visitors without a plan see a short note and a way back.
+- **Chapter 1, Today:** CPF balances now, what goes in each month (the engine's own figure, so PR graduated rates and wage ceilings apply), the monthly income it leads to, and one income gap in dollars. Pay, income wanted and balances can be changed in place; the working sits behind "Show how".
+- **One saved plan for both tools:** Studio opens the planner's plan and saves changes back to it. Without a finished plan, Studio shows a sample person and saves nothing.
+- **Saved plan version 2:** adds Studio's part (chapter and saved moves). Version 1 plans and client backups open unchanged. The planner no longer overwrites what Studio saved, and picks up changes made in Studio (or another planner tab) without reloading.
+- Release check: versions may carry a pre-release label on working branches (for example 3.4.0-studio.1).
+
 ## 3.3.1 — 16 Nov 2026
 Classic planner layout only; no change to calculations.
 - Wide screens (three input columns): the Quick Start / Full switch now spans all columns, so the columns start side by side under their header buttons. Previously it took the first column and pushed the others along, sending the third column to the bottom of the page in Full view. The same applies to the two-column tablet layout.

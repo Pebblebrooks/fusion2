@@ -1,6 +1,7 @@
 /**
  * Browser storage and hand-off for the new planner. Everything stays on this device.
- *   fusion_guided_plan_v1 — the answers from setup plus what-if changes
+ *   fusion_guided_plan_v1 — the answers from setup plus what-if changes, and Fusion Studio's part
+ *     (stored as version 2 since Studio; version 1 plans open unchanged and get Studio's defaults)
  *   fusion_gate_passed / fusion_plan — shared with the classic planner, so one access code covers both
  */
 import { encodePlanState } from '../state/shareLink.js';
@@ -23,7 +24,20 @@ export const loadPlan = () => {
     return raw && typeof raw === 'object' && raw.answers ? cleanState(raw) : null;
   } catch { return null; }
 };
-export const savePlan = (state) => set(PLAN_KEY, JSON.stringify({ v: 1, savedAt: new Date().toISOString(), ...state }));
+export const PLAN_VERSION = 2;
+export { PLAN_KEY };
+/**
+ * Save the plan. Answers are shared by the planner and Studio; Studio's own part (chapter,
+ * saved moves) is written only by Studio (`from: 'studio'`), so a planner tab opened earlier
+ * cannot wipe moves saved in Studio since.
+ */
+export const savePlan = (state, { from = 'planner' } = {}) => {
+  let studio = state.studio;
+  if (from !== 'studio') {
+    try { studio = JSON.parse(get(PLAN_KEY) || 'null')?.studio ?? studio; } catch { /* keep the state's own */ }
+  }
+  set(PLAN_KEY, JSON.stringify({ v: PLAN_VERSION, savedAt: new Date().toISOString(), ...state, studio }));
+};
 export const clearPlan = () => set(PLAN_KEY, null);
 
 /** Access: the Worker's tier cookie, or a code entered earlier on this device. */
