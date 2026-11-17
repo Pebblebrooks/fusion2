@@ -50,6 +50,7 @@ export function HomeChapter({ base, plan, val, lever, trial, onPick, onFact, now
             <MoneyField id="st-used" label="CPF used so far, with accrued interest" value={a.cpfUsedForHome} onChange={(v) => onFact({ cpfUsedForHome: v })} hint="On your CPF statement under Home ownership. Your share only." />
             <MoneyField id="st-loan" label="Home loan paid from CPF each month" value={a.housingMonthly} onChange={(v) => onFact({ housingMonthly: v })} hint="Leave at 0 if paid off or paid in cash." />
             {a.housingMonthly > 0 && <Slider id="st-loanend" label="Loan paid off at age" value={a.housingEndAge} min={age + 1} max={85} step={1} onChange={(v) => onFact({ housingEndAge: v })} format={(v) => `${v}`} />}
+            {a.housingMonthly > 0 && <MoneyField id="st-hps" label="Home Protection Scheme premium a year" value={a.hpsYearly} onChange={(v) => onFact({ hpsYearly: v })} hint="HDB flats bought with CPF. Paid from CPF until the loan ends or 65. On your CPF statement." />}
           </div>
         )}
       </section>
@@ -153,6 +154,7 @@ export function LaterChapter({ base, plan, val, lever, trial, onPick, now }) {
           <Slider id="l-medinf" label="Medical costs rise each year" value={val('medInflation')} min={2} max={8} step={0.5} onChange={(v) => lever('medInflation', v)} format={(v) => `${v}%`} />
           <Slider id="l-ip" label="Integrated Shield, private part a year" value={val('ipPrivate')} min={0} max={3000} step={100} onChange={(v) => lever('ipPrivate', v)} format={money} />
           <Slider id="l-med" label="Medical bills from MediSave a year" value={val('medUsage')} min={0} max={3000} step={100} onChange={(v) => lever('medUsage', v)} format={money} />
+          <Slider id="l-oama" label="Move from Ordinary Account to MediSave a year, from 55" value={val('oaToMaYearly')} min={0} max={Math.max(10000, val('oaToMaYearly'))} step={500} onChange={(v) => lever('oaToMaYearly', v)} format={money} />
         </div>
         <TrialBar {...trial} base={base} plan={plan} />
       </section>
@@ -166,6 +168,7 @@ export function LaterChapter({ base, plan, val, lever, trial, onPick, now }) {
         <ul className="st-notes">
           {h.maAt65Today !== null && <li>MediSave at 65: {money(h.maAt65Today)} in today's dollars, {pct(Math.min(1, h.maCoverage))} of the Basic Healthcare Sum.</li>}
           <li>MediShield Life premiums follow MOH's published table by age, before subsidies. MediSave pays MediShield Life and CareShield Life premiums in full, and the private part of an Integrated Shield Plan up to S$300 a year to 40, S$600 from 41 to 70 and S$900 from 71.</li>
+          <li>Moving Ordinary Account savings to MediSave is allowed from 55, once your Full Retirement Sum (or the Basic Retirement Sum with a property pledge) is set aside, and only up to your Basic Healthcare Sum.</li>
           <li>Worse cases: each line re-runs your plan with one thing made worse and shows the change in monthly income from {plan.payoutAge}, in today's dollars.</li>
           <li>The {pct(conf.chanceTarget ?? 0)} chance comes from {conf.runs} runs of the same plan with interest rates, prices and pay drawn at random around the assumptions. It is a guide, not a forecast. CareShield Life and other cover can be set in the planner under Healthcare.</li>
         </ul>

@@ -82,6 +82,9 @@ export default function FamilyChapter({ base, plan, val, lever, trial, onPick, o
         </div>
         {s.loved && <p className="small muted">{money(s.loved.sent)} transferred in all{s.loved.short > 0 ? `; ${money(s.loved.short)} less than asked, because CPF keeps back your ${s.loved.relation === 'spouse' ? 'Basic' : 'Full'} Retirement Sum first` : ''}. CPF transfers get no tax relief.</p>}
 
+        <h3 className="st-sub-h">Dependants' Protection Scheme</h3>
+        <Choice label="Life cover for your family, paid from CPF until 65" name="l-dps" value={val('dpsCover')} onChange={(v) => lever('dpsCover', v)} options={[[true, 'Keep it'], [false, 'Opt out']]} />
+
         <h3 className="st-sub-h">Cash top-up to your parents' CPF</h3>
         <Slider id="l-parent" label="Each year, in cash" value={val('parentTopUpYearly')} min={0} max={Math.max(16000, val('parentTopUpYearly'))} step={500} onChange={(v) => lever('parentTopUpYearly', v)} format={money} />
         {s.parentTopUp > 0 && <p className="small muted">Your own CPF does not change; you save about {money(s.taxSaved)} a year in income tax.</p>}
@@ -94,6 +97,7 @@ export default function FamilyChapter({ base, plan, val, lever, trial, onPick, o
           {s.hasPartner && <li>Your partner's income is worked out from their own CPF, the same way as yours: CPF LIFE {money(s.partnerLife)} a month for life from {s.partnerPayoutAge}, plus their Ordinary Account. If one of you dies, that person's CPF LIFE payouts stop.</li>}
           <li>Cash top-ups to the Special or Retirement Account of parents, parents-in-law, grandparents or grandparents-in-law earn tax relief of up to S$8,000 a year, on top of the S$8,000 for your own account. The S$8,000 for loved ones is shared with cash top-ups to their MediSave.</li>
           <li>Relief applies only up to the recipient's current Full Retirement Sum. For a spouse or sibling, relief applies only if their income the year before was S$8,000 or less, or they have a disability.</li>
+          <li>Dependants' Protection Scheme: S$70,000 of life cover to 60, then S$55,000 to 65, from S$18 a year (34 and below) to S$298 (55 to 64), paid from your Ordinary Account.</li>
           <li>Tax saved is an estimate from your pay, after CPF and earned-income relief; your other reliefs are not known here.</li>
           <li>CPF Education Loan Scheme: tuition for full-time subsidised courses can be paid from your Ordinary Account, up to 40% of your accumulated Ordinary Account savings less what is already used; from 55, only after the Full Retirement Sum is set aside. Your child repays it, with the interest it would have earned (2.5% a year), into your Ordinary Account over up to 12 years, usually from a year after the course ends.</li>
           <li>Repayments that arrive after {plan.payoutAge} add to your Ordinary Account but are not counted in your monthly income here.</li>

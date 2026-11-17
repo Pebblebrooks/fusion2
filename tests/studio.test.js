@@ -260,3 +260,32 @@ test('Family: tuition paid and repaid, and transfers limited by the retirement s
   const got = { ...DEFAULT_INPUTS, ...back.inputs }; // links carry only what differs from the defaults
   for (const k of ['oaEduStartAge', 'oaEduRepayYears', 'oaToLovedOneYearly', 'lovedOneFromAge', 'lovedOneYears']) assert.equal(got[k], inputs[k], k);
 });
+
+test('Phase 3 batch A: new settings reach the engine and respect CPF limits', () => {
+  const p0 = plan({});
+  // Voluntary contributions: money in rises, never past the S$37,740 annual limit
+  const vc = plan({ vc3aYearly: 50000 });
+  const r0 = vc.rows[0];
+  assert.ok(r0.injected > p0.rows[0].injected);
+  assert.ok(r0.yearMandatory + r0.yearVoluntary <= 37740 + 1, `${r0.yearMandatory} + ${r0.yearVoluntary}`);
+  // Ordinary Account to MediSave: from 55 only, and only up to the Basic Healthcare Sum
+  const low = { birthYear: 1968, ma: 10000, oa: 300000, sa: 250000, work: 'none' }; // 58, MediSave well below the BHS
+  const ma = plan({ ...low, oaToMaYearly: 10000 }), noMa = plan(low);
+  assert.ok(ma.rows[0].ma > noMa.rows[0].ma && ma.rows[0].oa < noMa.rows[0].oa, 'moves from 55');
+  assert.equal(plan({ oaToMaYearly: 10000 }).rows[0].oa, p0.rows[0].oa, 'not before 55');
+  assert.ok(Math.max(...plan({ ...low, oaToMaYearly: 50000 }).rows.map((r) => r.ma)) <= 130000, 'stops at the Basic Healthcare Sum');
+  // Dependants' Protection: opting out leaves the premium in the Ordinary Account
+  assert.ok(plan({ dpsCover: false }).rows[0].oa > p0.rows[0].oa);
+  // Home Protection: charged only while a CPF home loan runs
+  const loan = { ownsHome: true, homeValue: 500000, housingMonthly: 1000, housingEndAge: 60 };
+  assert.ok(plan({ ...loan, hpsYearly: 400 }).rows[0].oa < plan(loan).rows[0].oa);
+  assert.equal(plan({ hpsYearly: 400 }).inputs.hpsAnnualPremium, 0);
+  // Pledge: needs a home; keeps only the BRS at 55 and lets the member take more out
+  assert.equal(plan({ pledge: true }).inputs.usePropertyPledge, false);
+  const home = { ownsHome: true, homeValue: 600000 };
+  const pledged = plan({ ...home, pledge: true, withdrawAt55: 2000000 }), t = turning55Scene(pledged);
+  assert.equal(t.pledge, true);
+  assert.ok(t.withdrawn > turning55Scene(plan({ ...home, withdrawAt55: 2000000 })).withdrawn, 'pledge lets more out at 55');
+  assert.ok(pledged.payoutToday < plan(home).payoutToday, 'pledge lowers CPF LIFE');
+  for (const k of ['vc3aYearly', 'oaToMaYearly', 'dpsCover', 'withdrawAt55', 'pledge']) assert.ok(KEY_CHAPTER[k], k);
+});

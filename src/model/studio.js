@@ -153,9 +153,12 @@ export const turning55Scene = (plan) => {
   const ra = Math.round(plan.raAt55);
   const left = Math.max(0, savings - ra);
   const metFrs = ra >= frs - 1;
+  // Cash actually taken out from 55 until payouts start (withdrawal at 55 and any pledge withdrawal)
+  const withdrawn = Math.round(plan.rows.filter((r) => r.age >= 55 && r.age < plan.payoutAge).reduce((t, r) => t + (Number(r.yearOaDrawOut) || 0), 0));
   return {
     done: false, year55: plan.year55, yearsTo: 55 - plan.age, ra, sums, savings, coverage: plan.frsCoverage, metFrs,
     takeOut: metFrs ? left : Math.min(5000, left), stays: metFrs ? 0 : Math.max(0, left - 5000),
+    withdrawn, pledge: !!plan.inputs.usePropertyPledge,
   };
 };
 
@@ -203,6 +206,11 @@ export const describeChange = (key, value, plan) => {
     case 'lovedRelation': return `Transfers go to your ${value === 'spouse' ? 'spouse' : value === 'other' ? 'sibling or in-law' : 'parents or grandparents'}`;
     case 'lovedFromAge': return `Transfers start at ${value}`;
     case 'lovedYears': return `Transfers for ${value} years`;
+    case 'vc3aYearly': return value > 0 ? `Add ${money(value)} a year to all three CPF accounts` : 'No voluntary contributions';
+    case 'oaToMaYearly': return value > 0 ? `Move ${money(value)} a year from Ordinary Account to MediSave` : 'No transfers to MediSave';
+    case 'dpsCover': return value ? "Keep Dependants' Protection cover" : "Opt out of Dependants' Protection";
+    case 'withdrawAt55': return value > 0 ? `Take out ${money(value)} at 55, in today's dollars` : 'Take nothing out at 55';
+    case 'pledge': return value ? 'Pledge your home at 55' : 'No property pledge';
     case 'oaKeep': return value > 0 ? `Keep ${money(value)} of Ordinary Account savings untouched` : 'Spend all Ordinary Account savings';
     default: return `${key}: ${value}`;
   }
@@ -289,6 +297,8 @@ export const KEY_CHAPTER = {
   medInflation: 'later', ipPrivate: 'later', medUsage: 'later', oaKeep: 'legacy', parentTopUpYearly: 'family',
   eduYearly: 'family', eduStartAge: 'family', eduYears: 'family', eduRepayYears: 'family',
   lovedTransferYearly: 'family', lovedRelation: 'family', lovedFromAge: 'family', lovedYears: 'family',
+  vc3aYearly: 'building', oaToMaYearly: 'later', dpsCover: 'family',
+  withdrawAt55: 'turning55', pledge: 'turning55',
 };
 const chapterFor = (change) => KEY_CHAPTER[Object.keys(change)[0]] || 'payout';
 

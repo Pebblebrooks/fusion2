@@ -95,7 +95,9 @@ export default function TodayChapter({ plan, answers, onChange, sample, onPick }
         <div className="st-lever-grid">
           {answers.work === 'employee'
             ? <MoneyField id="st-salary" label="Monthly pay before CPF" value={answers.salary} onChange={set('salary')} hint="Before your own CPF is taken off" />
-            : <p className="st-fact"><span className="field-label">Work</span>{answers.work === 'self' ? 'Self-employed' : 'Not working'}<span className="field-hint">Change this in the planner under Details.</span></p>}
+            : answers.work === 'self'
+              ? <MoneyField id="st-trade" label="Yearly net trade income" value={answers.tradeIncome} onChange={set('tradeIncome')} hint="Self-employed: decides your MediSave contributions" />
+              : <p className="st-fact"><span className="field-label">Work</span>Not working<span className="field-hint">Change this in the planner under Details.</span></p>}
           <MoneyField id="st-target" label={`Monthly income you want from ${plan.payoutAge}`} value={answers.targetIncome} onChange={set('targetIncome')} hint="In today's dollars" />
         </div>
         <details className="st-balances">

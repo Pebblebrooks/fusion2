@@ -6,6 +6,17 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.4.0-studio.7 — 17 Nov 2026
+Fusion Studio, Phase 3 batch A (studio branch preview only). No change to engine calculations; each new setting was checked against current CPF rules first.
+- **Today:** self-employed members enter yearly net trade income (sets MediSave contributions).
+- **Building:** try voluntary contributions to all three accounts (within the S$37,740 annual limit; no tax relief).
+- **Home:** Home Protection Scheme premium, paid from CPF while the HDB loan runs (to 65 at most).
+- **Turning 55:** try taking money out at 55, and pledging your home (only the Basic Retirement Sum goes to the Retirement Account; the rest stays withdrawable). Shows what CPF would let you take out.
+- **Family:** keep or opt out of Dependants' Protection (S$70,000 cover to 60, S$55,000 to 65; premiums S$18 to S$298 a year from CPF).
+- **Later life:** try moving Ordinary Account savings to MediSave from 55, up to the Basic Healthcare Sum.
+- New plan fields `vc3aYearly`, `oaToMaYearly`, `dpsCover`, `hpsYearly`, `pledge` (defaults leave older plans unchanged; Dependants' Protection was already on by default).
+- **Held for owner decision (engine errors found in rule checks):** Lease Buyback Scheme (top-up rule, cash bonus, a monthly HDB payment that does not exist), MRSS/MMSS property and annual-value conditions, CPFIS treated as money gone, and the Full Retirement Sum condition on Ordinary Account to MediSave transfers.
+
 ## 3.4.0-studio.6 — 17 Nov 2026
 CPF engine corrections (owner-approved) and Family completed. Rules version 2026-11-17.
 - **Engine, Education Loan Scheme (corrections P, Q):** tuition paid from the Ordinary Account is now repaid into it by the student, with the interest it would have earned (2.5% a year), in equal yearly instalments over up to 12 years from a year after the course ends. Fees can start at a chosen age instead of only this year. Before, the money was treated as gone for good, so the Ordinary Account was understated. Affects the classic planner too, for plans that use it.

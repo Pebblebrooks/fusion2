@@ -64,6 +64,12 @@ export const DEFAULT_ANSWERS = {
   eduRepayYears: 12,       // years the student takes to repay (CPF allows up to 12)
   // Family (Studio): yearly transfer from your Ordinary Account to a loved one's CPF (no tax relief)
   lovedTransferYearly: 0, lovedRelation: 'parent', lovedFromAge: 0, lovedYears: 5,
+  // Studio Phase 3 (all off by default, so older plans are unchanged)
+  vc3aYearly: 0,           // voluntary contribution to all three accounts, a year (within the S$37,740 annual limit)
+  oaToMaYearly: 0,         // Ordinary Account to MediSave transfer a year, from 55 (up to the Basic Healthcare Sum)
+  dpsCover: true,          // Dependants' Protection Scheme: premiums from CPF until 65 (opt out = false)
+  hpsYearly: 0,            // Home Protection Scheme premium a year, from CPF, while the HDB loan runs (to 65 at most)
+  pledge: false,           // property pledge at 55: only the Basic Retirement Sum goes to the RA; the rest stays in the OA
   // Healthcare (yearly, today's dollars). MediShield Life premiums come from the official age table.
   medUsage: 500,           // medical bills paid from MediSave
   ipPrivate: 0,            // private part of an Integrated Shield Plan
@@ -130,9 +136,19 @@ export const toEngineInputs = (answers, now = new Date()) => {
     // Withdrawal at 55 is entered in today's dollars. The engine limits it to what CPF allows.
     oaWithdrawalAt55: age < 55 ? Math.round(num(a.withdrawAt55) * Math.pow(1 + clamp(num(a.inflation, 2), 0, 6) / 100, 55 - age)) : 0,
     oaWithdrawalFreq: 'one-time',
+    vc3aCash: num(a.vc3aYearly), oaToMaTransfer: num(a.oaToMaYearly),
+    dpsMode: a.dpsCover === false ? 'optout' : 'auto',
+    hpsAnnualPremium: a.ownsHome && num(a.housingMonthly) > 0 ? num(a.hpsYearly) : 0,
+    ...pledgeInputs(a),
     ...familyInputs(a, age),
   };
 };
+
+/**
+ * Property pledge (needs a home in the plan): at 55 only the Basic Retirement Sum goes to the RA and the rest
+ * stays in the OA, where the withdrawal at 55 can take it out.
+ */
+const pledgeInputs = (a) => ({ usePropertyPledge: !!a.pledge && !!a.ownsHome });
 
 /**
  * Family answers → engine inputs. Tuition is entered in today's dollars and raised with prices to the
