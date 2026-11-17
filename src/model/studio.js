@@ -5,7 +5,7 @@
  */
 import { DEFAULT_ANSWERS, buildPlan, findMoves, stressTests, taxSavedByTopUp, taxSavedByRelief, RSTU_RELIEF_CAP } from './plan.js';
 import { healthcare, drawdown, solveStopWork, solveTopUp, buildHousehold } from './household.js';
-import { RETIREMENT_SUMS_2026, RETIREMENT_SUMS_2027, projectedSum, SHB } from '../policy/cpf2026.js';
+import { RETIREMENT_SUMS_2026, RETIREMENT_SUMS_2027, projectedSum, SHB, scEmployeeRate } from '../policy/cpf2026.js';
 
 /** Chapters in life order. `ready` = built in this release; the rest show as coming. */
 export const CHAPTERS = [
@@ -211,6 +211,11 @@ export const describeChange = (key, value, plan) => {
     case 'dpsCover': return value ? "Keep Dependants' Protection cover" : "Opt out of Dependants' Protection";
     case 'withdrawAt55': return value > 0 ? `Take out ${money(value)} at 55, in today's dollars` : 'Take nothing out at 55';
     case 'pledge': return value ? 'Pledge your home at 55' : 'No property pledge';
+    case 'savingsYearly': return value > 0 ? `Save ${money(value)} a year outside CPF` : 'Stop saving outside CPF';
+    case 'savingsGrowth': return `Savings grow ${value}% a year`;
+    case 'spendSavings': return value ? 'Use your savings as retirement income' : 'Keep your savings untouched';
+    case 'dieWithZero': return value ? 'Spend everything by the end (die with zero)' : 'Keep something back';
+    case 'dieWithZeroAge': return `Spend down by age ${value}`;
     case 'oaKeep': return value > 0 ? `Keep ${money(value)} of Ordinary Account savings untouched` : 'Spend all Ordinary Account savings';
     default: return `${key}: ${value}`;
   }
@@ -299,6 +304,7 @@ export const KEY_CHAPTER = {
   lovedTransferYearly: 'family', lovedRelation: 'family', lovedFromAge: 'family', lovedYears: 'family',
   vc3aYearly: 'building', oaToMaYearly: 'later', dpsCover: 'family',
   withdrawAt55: 'turning55', pledge: 'turning55',
+  savingsYearly: 'building', savingsGrowth: 'building', spendSavings: 'payout', dieWithZero: 'legacy', dieWithZeroAge: 'legacy',
 };
 const chapterFor = (change) => KEY_CHAPTER[Object.keys(change)[0]] || 'payout';
 
@@ -312,8 +318,12 @@ export const whatIf = (answers, now = new Date()) => {
   const target = base.target;
   const stop = target > 0 ? solveStopWork(answers, now) : null;
   const topUp = target > 0 ? solveTopUp(answers, now) : null;
+  const startAge = target > 0 && base.gapToday > 0 ? solvePayoutAge(answers, now) : null;
+  const frs = solveFrsTopUp(answers, now);
   return {
     income: base.incomeToday, target, gap: base.gapToday, best,
+    startAge: startAge ? { age: startAge, change: { payoutAge: startAge }, chapter: 'payout' } : null,
+    frsTopUp: frs && frs.possible ? { amount: frs.amount, change: { topUpYearly: frs.amount }, chapter: 'turning55' } : null,
     stopWork: stop && stop.possible ? { age: stop.age, change: { stopWorkAge: stop.age }, chapter: 'building' } : stop ? { possible: false, best: stop.best } : null,
     topUp: topUp && topUp.possible ? { amount: topUp.amount, taxSaved: topUp.taxSaved ?? taxSavedByTopUp(base, topUp.amount), change: { topUpYearly: topUp.amount }, chapter: 'turning55' } : topUp ? { possible: false } : null,
   };
@@ -360,4 +370,42 @@ const lovedSummary = (plan) => {
   const sent = plan.rows.reduce((t, r) => t + (r.yearLovedOneOut || 0), 0);
   const asked = i.oaToLovedOneYearly * i.lovedOneYears;
   return { yearly: i.oaToLovedOneYearly, from: i.lovedOneFromAge, years: i.lovedOneYears, relation: i.lovedOneRelation, sent, short: Math.max(0, asked - sent) };
+};
+
+/* ── Money outside CPF and the cash budget (Building) ────────────────────── */
+const OW_CEILING = 8000; // ordinary wage ceiling a month, 2026
+/**
+ * Take-home pay after the employee's CPF, spending and private insurance premiums, and what is left
+ * each month. Employee share: citizens and PRs from year 3 at the age rate; PR year 1 at 5%, year 2 at
+ * up to 15% (graduated rates). About: bonuses and other deductions are not known here.
+ */
+export const budgetScene = (plan) => {
+  const a = plan.answers, employee = a.work === 'employee';
+  const pay = employee ? Number(a.salary) || 0 : a.work === 'self' ? (Number(a.tradeIncome) || 0) / 12 : 0;
+  let rate = scEmployeeRate(plan.age, plan.year);
+  if (a.status === 'PR1') rate = 0.05; else if (a.status === 'PR2') rate = Math.min(rate, 0.15);
+  const cpf = employee ? Math.round(Math.min(pay, OW_CEILING) * rate) : 0;
+  const takeHome = Math.round(pay - cpf), spend = Number(a.monthlySpend) || 0, insurance = Math.round((Number(a.insuranceYearly) || 0) / 12);
+  const left = takeHome - spend - insurance;
+  return { entered: spend > 0 || insurance > 0, pay: Math.round(pay), cpf, takeHome, spend, insurance, left, saveYearly: Math.max(0, Math.round(left * 12 / 100) * 100),
+    savingsNow: Number(a.savingsNow) || 0, savingsYearly: Number(a.savingsYearly) || 0, savingsAtPayout: plan.savingsAtPayoutToday, payoutAge: plan.payoutAge };
+};
+
+/* ── What if: two more answers worked back from the target ───────────────── */
+/** Earliest CPF LIFE start age (65 to 70) that meets the target, or null. */
+export const solvePayoutAge = (answers, now = new Date()) => {
+  for (let pa = Math.max(65, Number(answers.payoutAge) || 65); pa <= 70; pa++) {
+    const p = buildPlan({ ...answers, payoutAge: pa }, now);
+    if (p.target > 0 && p.gapToday === 0) return pa;
+  }
+  return null;
+};
+/** Yearly cash top-up that reaches the Full Retirement Sum at 55 (below 55 only), or null. */
+export const solveFrsTopUp = (answers, now = new Date()) => {
+  const base = buildPlan(answers, now);
+  if (base.age >= 55 || base.frsCoverage >= 1) return null;
+  let lo = 0, hi = 40000;
+  if (buildPlan({ ...answers, topUpYearly: hi }, now).frsCoverage < 0.999) return { possible: false };
+  while (hi - lo > 100) { const mid = (lo + hi) / 2; if (buildPlan({ ...answers, topUpYearly: mid }, now).frsCoverage >= 0.999) hi = mid; else lo = mid; }
+  return { possible: true, amount: Math.ceil(hi / 100) * 100 };
 };

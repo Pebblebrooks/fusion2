@@ -3,7 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_ANSWERS, buildPlan } from '../src/model/plan.js';
 import { CHAPTERS, cleanStudio, todayScene, chapterWhen, buildingScene, turning55Scene, payoutScene, sumsForYear,
-  makeMove, undoMove, myPlanScene, nextChapter, prevChapter, homeScene, laterScene, legacyScene, whatIf, KEY_CHAPTER, describeChange, familyScene } from '../src/model/studio.js';
+  makeMove, undoMove, myPlanScene, nextChapter, prevChapter, homeScene, laterScene, legacyScene, whatIf, KEY_CHAPTER, describeChange, familyScene,
+  budgetScene, solvePayoutAge, solveFrsTopUp } from '../src/model/studio.js';
+import { cleanLifeEvents } from '../src/model/plan.js';
 import { taxSavedByRelief } from '../src/model/plan.js';
 import { buildHousehold } from '../src/model/household.js';
 import { interpolateCpfLife, raAtPayoutStart } from '../src/engine/cpfLife.js';
@@ -288,4 +290,49 @@ test('Phase 3 batch A: new settings reach the engine and respect CPF limits', ()
   assert.ok(t.withdrawn > turning55Scene(plan({ ...home, withdrawAt55: 2000000 })).withdrawn, 'pledge lets more out at 55');
   assert.ok(pledged.payoutToday < plan(home).payoutToday, 'pledge lowers CPF LIFE');
   for (const k of ['vc3aYearly', 'oaToMaYearly', 'dpsCover', 'withdrawAt55', 'pledge']) assert.ok(KEY_CHAPTER[k], k);
+});
+
+test('Phase 3 batch B: money outside CPF, die with zero, life events, budget and goal answers', () => {
+  const p0 = plan({});
+  // Savings pot grows, and counts as income only when chosen
+  const sv = plan({ savingsNow: 100000, savingsYearly: 10000 });
+  assert.ok(sv.savingsAtPayoutToday > 100000);
+  assert.equal(sv.savingsMonthlyToday, 0);
+  assert.equal(sv.incomeToday, p0.incomeToday);
+  const spent = plan({ savingsNow: 100000, savingsYearly: 10000, spendSavings: true });
+  assert.ok(spent.savingsMonthlyToday > 0);
+  assert.equal(spent.incomeToday, p0.incomeToday + spent.savingsMonthlyToday);
+  // A Silver Housing Bonus is counted in the sale, not again as savings
+  const shb = plan({ birthYear: 1965, work: 'none', oa: 200000, sa: 150000, ma: 60000, ownsHome: true, homeValue: 500000, sellHomeAge: 63, shb: true, shbCommit: 60000, payoutAge: 65 });
+  assert.ok(shb.sale && shb.sale.bonus > 0, 'bonus paid');
+  assert.ok(shb.savingsAtPayoutToday < 1000, `not double counted: ${shb.savingsAtPayoutToday}`);
+  // Die with zero: everything spread to the chosen age, nothing kept back
+  const dwz = plan({ savingsNow: 50000, dieWithZero: true, dieWithZeroAge: 85, oaKeep: 30000 });
+  assert.equal(dwz.spreadTo, 85);
+  assert.ok(dwz.savingsMonthlyToday > 0);
+  assert.equal(legacyScene(dwz).left.find((x) => x.age === 90).oa, 0);
+  // Life events
+  const ev = (e) => plan({ savingsNow: 50000, lifeEvents: [e] });
+  const job = ev({ type: 'retrenchment', startAge: 40, endAge: 41, amount: 0 });
+  assert.equal(job.rows.find((r) => r.age === 40).yearMandatory, 0);
+  const med = ev({ type: 'medical_crisis', startAge: 40, endAge: 40, amount: 20000 });
+  const noMed = plan({ savingsNow: 50000 });
+  assert.equal(med.rows.find((r) => r.age === 40).oa, noMed.rows.find((r) => r.age === 40).oa, 'medical bills not from the OA');
+  assert.ok(med.rows.find((r) => r.age === 40).privateAssets < noMed.rows.find((r) => r.age === 40).privateAssets);
+  const win = ev({ type: 'windfall', startAge: 45, amount: 100000 });
+  assert.ok(win.savingsAtPayoutToday > noMed.savingsAtPayoutToday + 50000);
+  assert.deepEqual(cleanLifeEvents([{ type: 'nope' }, { type: 'windfall', startAge: 50, endAge: 60, amount: -5 }], 35), [{ type: 'windfall', startAge: 50, endAge: 50, amount: 0 }]);
+  // Budget: citizen aged 35 on S$6,000 pays 20% employee CPF
+  const b = budgetScene(plan({ monthlySpend: 3000, insuranceYearly: 2400 }));
+  assert.deepEqual([b.cpf, b.takeHome, b.insurance, b.left], [1200, 4800, 200, 1600]);
+  assert.equal(budgetScene(plan({ status: 'PR1' })).cpf, 300); // PR year 1: 5%
+  // Goal answers
+  const pa = solvePayoutAge({ ...DEFAULT_ANSWERS, targetIncome: 3900 }, NOW);
+  assert.ok(pa === null || (pa >= 65 && pa <= 70));
+  if (pa) assert.equal(plan({ targetIncome: 3900, payoutAge: pa }).gapToday, 0);
+  const low = { ...DEFAULT_ANSWERS, salary: 3000, oa: 10000, sa: 5000, ma: 8000 };
+  const frs = solveFrsTopUp(low, NOW);
+  assert.ok(frs.possible && frs.amount > 0);
+  assert.ok(buildPlan({ ...low, topUpYearly: frs.amount }, NOW).frsCoverage >= 0.999);
+  for (const k of ['savingsYearly', 'spendSavings', 'dieWithZero']) assert.ok(KEY_CHAPTER[k], k);
 });

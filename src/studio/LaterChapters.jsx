@@ -3,11 +3,12 @@
  * Facts about the home are saved straight away (like Today); choices (selling, health assumptions,
  * how to spend the Ordinary Account) are tried first and kept as moves.
  */
-import { useDeferredValue, useMemo } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
+import { LIFE_EVENTS, cleanLifeEvents } from '../model/plan.js';
 import { homeScene, laterScene, legacyScene } from '../model/studio.js';
 import { runConfidence } from '../model/household.js';
 import { MoneyField, Slider, Choice, money, pct } from '../next/ui.jsx';
-import { Scene, TrialBar, ShowHow, SceneNav } from './shared.jsx';
+import { Scene, TrialBar, ShowHow, SceneNav, useDollars } from './shared.jsx';
 
 const signed = (v) => `${v >= 0 ? '+' : '−'}${money(Math.abs(v))}`;
 
@@ -117,7 +118,45 @@ export function HomeChapter({ base, plan, val, lever, trial, onPick, onFact, now
 }
 
 /* ── Chapter 7: Later life ───────────────────────────────────────────────── */
-export function LaterChapter({ base, plan, val, lever, trial, onPick, now }) {
+/** Life events: saved to the plan straight away (they are part of your story, not a move). */
+function LifeEvents({ events, age, onChange }) {
+  const [draft, setDraft] = useState({ type: 'retrenchment', startAge: age + 5, endAge: age + 5, amount: 0 });
+  const kind = LIFE_EVENTS[draft.type];
+  const when = (e) => (LIFE_EVENTS[e.type].range && e.endAge > e.startAge ? `${e.startAge} to ${e.endAge}` : `at ${e.startAge}`);
+  const amountText = (e) => (e.type === 'salary_cut' ? `${e.amount}% cut` : LIFE_EVENTS[e.type].amount ? `${money(e.amount)} ${LIFE_EVENTS[e.type].amount}` : '');
+  const add = () => { onChange(cleanLifeEvents([...events, draft], age)); };
+  return (
+    <section className="panel st-levers" aria-labelledby="st-events-h">
+      <h2 id="st-events-h">Life events</h2>
+      <p className="muted small">Things that may happen along the way, saved to your plan as you add them. They change every chapter's figures.</p>
+      {events.length > 0 && (
+        <ul className="st-events">
+          {events.map((e, i) => (
+            <li key={`${e.type}-${i}`}>
+              <span><b>{LIFE_EVENTS[e.type].label}</b> {when(e)}{amountText(e) ? `, ${amountText(e)}` : ''}</span>
+              <button type="button" className="btn btn-ghost" onClick={() => onChange(events.filter((_, j) => j !== i))}>Remove</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="st-lever-grid">
+        <label className="fld"><span className="field-label">Event</span>
+          <select className="st-select" value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}>
+            {Object.entries(LIFE_EVENTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </label>
+        <Slider id="ev-start" label={kind.range ? 'From age' : 'At age'} value={draft.startAge} min={age} max={95} step={1} onChange={(v) => setDraft({ ...draft, startAge: v, endAge: Math.max(v, draft.endAge) })} format={(v) => `${v}`} />
+        {kind.range && <Slider id="ev-end" label="To age" value={Math.max(draft.endAge, draft.startAge)} min={draft.startAge} max={95} step={1} onChange={(v) => setDraft({ ...draft, endAge: v })} format={(v) => `${v}`} />}
+        {kind.amount && (draft.type === 'salary_cut'
+          ? <Slider id="ev-amt" label="Pay cut" value={draft.amount} min={0} max={100} step={5} onChange={(v) => setDraft({ ...draft, amount: v })} format={(v) => `${v}%`} />
+          : <MoneyField id="ev-amt" label={`Amount ${kind.amount}`} value={draft.amount} onChange={(v) => setDraft({ ...draft, amount: v })} />)}
+      </div>
+      <div className="st-row"><button type="button" className="btn btn-secondary" onClick={add} disabled={events.length >= 8}>Add this event</button></div>
+    </section>
+  );
+}
+
+export function LaterChapter({ base, plan, val, lever, trial, onPick, now, onFact }) {
   const s = useMemo(() => laterScene(plan, now), [plan, now]);
   // 500 simulated runs take a moment, so they follow the levers a beat behind.
   const answers = useDeferredValue(plan.answers);
@@ -159,6 +198,8 @@ export function LaterChapter({ base, plan, val, lever, trial, onPick, now }) {
         <TrialBar {...trial} base={base} plan={plan} />
       </section>
 
+      <LifeEvents events={cleanLifeEvents(base.answers.lifeEvents, plan.age)} age={plan.age} onChange={(list) => onFact({ lifeEvents: list })} />
+
       <ShowHow>
         <table className="st-table">
           <caption className="visually-hidden">Yearly health costs at each age, in today's dollars</caption>
@@ -169,6 +210,7 @@ export function LaterChapter({ base, plan, val, lever, trial, onPick, now }) {
           {h.maAt65Today !== null && <li>MediSave at 65: {money(h.maAt65Today)} in today's dollars, {pct(Math.min(1, h.maCoverage))} of the Basic Healthcare Sum.</li>}
           <li>MediShield Life premiums follow MOH's published table by age, before subsidies. MediSave pays MediShield Life and CareShield Life premiums in full, and the private part of an Integrated Shield Plan up to S$300 a year to 40, S$600 from 41 to 70 and S$900 from 71.</li>
           <li>Moving Ordinary Account savings to MediSave is allowed from 55, once your Full Retirement Sum (or the Basic Retirement Sum with a property pledge) is set aside, and only up to your Basic Healthcare Sum.</li>
+          <li>Life events: a job loss or career break stops your pay and CPF contributions for those years; a pay cut lowers both; part-time work replaces your pay with the part-time amount; a big medical bill is paid from your savings outside CPF (CPF does not let the Ordinary Account pay it); a windfall goes into those savings.</li>
           <li>Worse cases: each line re-runs your plan with one thing made worse and shows the change in monthly income from {plan.payoutAge}, in today's dollars.</li>
           <li>The {pct(conf.chanceTarget ?? 0)} chance comes from {conf.runs} runs of the same plan with interest rates, prices and pay drawn at random around the assumptions. It is a guide, not a forecast. CareShield Life and other cover can be set in the planner under Healthcare.</li>
         </ul>
@@ -182,11 +224,12 @@ export function LaterChapter({ base, plan, val, lever, trial, onPick, now }) {
 export function LegacyChapter({ base, plan, val, lever, trial, onPick }) {
   const s = useMemo(() => legacyScene(plan), [plan]);
   const at = s.at85;
+  const $ = useDollars();
   return (
     <Scene id="legacy">
       <section className="st-answer panel">
-        <p className="st-big"><span className="fig">{money(at?.total ?? 0)}</span> <span className="st-unit">left to your family if you live to {at?.age ?? 85}</span></p>
-        <p className="st-sub">In today's dollars{s.basic ? '; on the Basic plan, CPF LIFE amounts left are not included' : ''}.</p>
+        <p className="st-big"><span className="fig">{$.amount(at?.total ?? 0, at?.age ?? 85)}</span> <span className="st-unit">left to your family if you live to {at?.age ?? 85}</span></p>
+        <p className="st-sub">{$.future ? `In ${plan.answers.birthYear + (at?.age ?? 85)} dollars` : "In today's dollars"}{s.basic ? '; on the Basic plan, CPF LIFE amounts left are not included' : ''}.</p>
         <ul className="st-legacy" aria-label="What would be left at each age">
           {s.left.map((x) => (
             <li key={x.age}><span className="st-legacy-age">{x.age}</span>
@@ -204,10 +247,12 @@ export function LegacyChapter({ base, plan, val, lever, trial, onPick }) {
       <section className="st-levers panel" aria-labelledby="st-levers-h">
         <h2 id="st-levers-h">Try a change</h2>
         <p className="muted small">Nothing is saved until you choose Save this move.</p>
-        <div className="st-lever-grid">
+        <Choice label="Die with zero: spend your Ordinary Account and savings down to nothing by" name="l-dwz" value={val('dieWithZero')} onChange={(v) => lever('dieWithZero', v)} options={[[false, 'No, keep some'], [true, 'Yes']]} />
+        {val('dieWithZero') && <Slider id="l-dwzage" label="Spend down by age" value={val('dieWithZeroAge')} min={Math.max(75, plan.payoutAge + 5)} max={100} step={1} onChange={(v) => lever('dieWithZeroAge', v)} format={(v) => `${v}`} />}
+        {!val('dieWithZero') && <div className="st-lever-grid">
           <Slider id="l-keep" label="Keep untouched in your Ordinary Account" value={val('oaKeep')} min={0} max={Math.max(10000, Math.round(s.startToday / 10000) * 10000)} step={5000} onChange={(v) => lever('oaKeep', v)} format={money} />
           <Slider id="l-spread2" label="Spend Ordinary Account savings until age" value={val('oaSpreadTo')} min={Math.min(100, plan.payoutAge + 1)} max={100} step={1} onChange={(v) => lever('oaSpreadTo', v)} format={(v) => `${v}`} />
-        </div>
+        </div>}
         <TrialBar {...trial} base={base} plan={plan} />
       </section>
 
@@ -215,6 +260,7 @@ export function LegacyChapter({ base, plan, val, lever, trial, onPick }) {
         <ul className="st-notes">
           <li>Ordinary Account: {money(s.startToday)} at {s.from}, paid out at {money(s.monthly)} a month to age {s.spreadTo}{s.keep > 0 ? `, keeping ${money(s.keep)} untouched` : ''}, still earning 2.5% interest. What is left is shown in today's dollars.</li>
           <li>CPF LIFE: on Standard and Escalating plans, if you die before payouts add up to the premium (your Retirement Account when payouts start), the rest goes to your nominees. Shown here without interest, in today's dollars.</li>
+          <li>Die with zero spreads your Ordinary Account and your savings outside CPF evenly to the age you choose, keeping nothing back, so more is spent while you are alive. CPF LIFE still pays for life, so income does not stop at that age; what you spread does.</li>
           <li>Retirement Account savings not used for CPF LIFE, MediSave and any other CPF balances also go to your nominees; they are not shown here.</li>
         </ul>
       </ShowHow>

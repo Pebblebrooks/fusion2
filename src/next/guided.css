@@ -249,6 +249,7 @@ table.data tbody th { font-weight: 500; color: var(--ink-2); text-align: left; w
 
 /* ── Workspace layout and modules ─────────────────────────────────────────── */
 .seg-other, .sw.other { background: var(--s3); }
+.seg-save, .sw.save { background: repeating-linear-gradient(135deg, var(--s1) 0 3px, var(--surface) 3px 6px); box-shadow: inset 0 0 0 1px var(--s1); }
 .layout { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 32px; align-items: start; max-width: 1240px; }
 .layout .main { max-width: none; padding-left: 0; padding-right: 0; }
 .side-nav { position: sticky; top: 88px; display: grid; gap: 2px; padding-top: 32px; }

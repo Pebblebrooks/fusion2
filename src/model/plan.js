@@ -70,6 +70,16 @@ export const DEFAULT_ANSWERS = {
   dpsCover: true,          // Dependants' Protection Scheme: premiums from CPF until 65 (opt out = false)
   hpsYearly: 0,            // Home Protection Scheme premium a year, from CPF, while the HDB loan runs (to 65 at most)
   pledge: false,           // property pledge at 55: only the Basic Retirement Sum goes to the RA; the rest stays in the OA
+  // Money outside CPF (one pot: savings and investments), the cash budget, life events, die with zero
+  savingsNow: 0,           // savings and investments outside CPF today
+  savingsYearly: 0,        // added each year while working
+  savingsGrowth: 2.5,      // growth a year, % (before prices)
+  spendSavings: false,     // count the pot as income from the payout age, spread to the same age as the OA
+  monthlySpend: 0,         // cash budget: spending a month today (0 = not entered)
+  insuranceYearly: 0,      // private insurance premiums a year, paid in cash
+  lifeEvents: [],          // [{ type, startAge, endAge, amount }] — see LIFE_EVENTS
+  dieWithZero: false,      // spend Ordinary Account and savings down to nothing by dieWithZeroAge
+  dieWithZeroAge: 90,
   // Healthcare (yearly, today's dollars). MediShield Life premiums come from the official age table.
   medUsage: 500,           // medical bills paid from MediSave
   ipPrivate: 0,            // private part of an Integrated Shield Plan
@@ -141,8 +151,43 @@ export const toEngineInputs = (answers, now = new Date()) => {
     hpsAnnualPremium: a.ownsHome && num(a.housingMonthly) > 0 ? num(a.hpsYearly) : 0,
     ...pledgeInputs(a),
     ...familyInputs(a, age),
+    currentPrivateAssets: num(a.savingsNow), annualPrivateSaving: num(a.savingsYearly), privateAssetGrowthRate: clamp(num(a.savingsGrowth, 2.5), -5, 12),
+    // Medical bills come from cash savings: CPF does not let the Ordinary Account pay them.
+    lifeEvents: cleanLifeEvents(a.lifeEvents, age).map((e, i) => ({ id: `s${i}`, type: e.type, startAge: e.startAge, endAge: e.endAge,
+      magnitude: e.amount, enabled: true, drawSource: 'private', destination: 'private' })),
   };
 };
+
+/** Money outside CPF at the start of age `at`, less the Silver Housing Bonus (counted in the sale), grown to then. */
+const savingsPot = (rows, at, growth) => {
+  const before = rows.filter((r) => r.age < at);
+  const last = before.at(-1) || rows[0];
+  const bonus = before.reduce((t, r) => t + num(r.shbBonus) * Math.pow(1 + growth, at - 1 - r.age), 0);
+  return Math.max(0, num(last?.privateAssets) - bonus);
+};
+/** Level monthly amount that uses up `pv` over `years`, earning `yearly` real growth. */
+const annuityMonthly = (pv, yearly, years) => {
+  const n = years * 12, r = Math.pow(1 + yearly, 1 / 12) - 1;
+  return Math.abs(r) < 1e-9 ? pv / n : (pv * r) / (1 - Math.pow(1 + r, -n));
+};
+
+/** Life events Studio offers, and what the amount means for each (engine `magnitude`). */
+export const LIFE_EVENTS = {
+  retrenchment: { label: 'Job loss', amount: null, range: true },
+  career_break: { label: 'Career break', amount: null, range: true },
+  salary_cut: { label: 'Pay cut', amount: '% cut', range: true },
+  barista_fire: { label: 'Part-time work', amount: 'pay a month', range: true },
+  medical_crisis: { label: 'Big medical bill', amount: 'a year, in cash', range: true },
+  windfall: { label: 'Windfall or inheritance', amount: 'once', range: false },
+};
+/** Keep only well-formed events (at most 8), with ages inside the plan. */
+export const cleanLifeEvents = (list, age = 0) => (Array.isArray(list) ? list : [])
+  .filter((e) => e && LIFE_EVENTS[e.type]).slice(0, 8)
+  .map((e) => {
+    const start = clamp(num(e.startAge, age + 1), age, 100);
+    return { type: e.type, startAge: start, endAge: LIFE_EVENTS[e.type].range ? clamp(num(e.endAge, start), start, 100) : start,
+      amount: Math.max(0, Math.min(e.type === 'salary_cut' ? 100 : 10000000, num(e.amount))) };
+  });
 
 /**
  * Property pledge (needs a home in the plan): at 55 only the Basic Retirement Sum goes to the RA and the rest
@@ -198,7 +243,9 @@ const LABELS = [[85, 'On track'], [65, 'Nearly there'], [40, 'Needs attention'],
  * @returns plan object (see fields below). Money fields ending in `Today` are in today's dollars.
  */
 export const buildPlan = (answers, now = new Date(), engineOptions = null) => {
-  const a = { ...DEFAULT_ANSWERS, ...answers };
+  const given = { ...DEFAULT_ANSWERS, ...answers };
+  // Die with zero: Ordinary Account and savings are spread to that age, with nothing kept back.
+  const a = given.dieWithZero ? { ...given, oaSpreadTo: clamp(num(given.dieWithZeroAge, 90), 70, 100), oaKeep: 0, spendSavings: true } : given;
   const inputs = toEngineInputs(a, now);
   const rows = engineOptions ? runProjectionEngine(inputs, engineOptions) : runProjectionEngine(inputs);
   const byAge = new Map(rows.map((r) => [r.age, r]));
@@ -262,7 +309,15 @@ export const buildPlan = (answers, now = new Date(), engineOptions = null) => {
   const saleMonthly = sale ? sale.poolToday / Math.max(12, (spreadTo - saleFrom) * 12) : 0;
   const oaMonthlyToday = Math.max(0, Math.round(oaMonthlyRaw + Math.min(0, saleMonthly)));
   const otherMonthlyToday = Math.max(0, Math.round(saleMonthly));
-  const incomeToday = payoutToday + oaMonthlyToday + otherMonthlyToday;
+  // Money outside CPF at the payout age (the engine's private assets, less any Silver Housing Bonus, which
+  // is already counted in the sale). Counted as income only when chosen, spread to the same age as the OA.
+  const pot = savingsPot(rows, Math.max(pa, age), num(inputs.privateAssetGrowthRate) / 100);
+  const savingsAtPayoutToday = Math.round(toToday(pot, Math.max(pa, age)));
+  const realGrowth = (1 + num(inputs.privateAssetGrowthRate) / 100) / (1 + infl) - 1;
+  const savingsMonthlyToday = a.spendSavings && savingsAtPayoutToday > 0
+    ? Math.round(annuityMonthly(savingsAtPayoutToday, realGrowth, Math.max(1, spreadTo - Math.max(pa, age))))
+    : 0;
+  const incomeToday = payoutToday + oaMonthlyToday + otherMonthlyToday + savingsMonthlyToday;
   const target = num(a.targetIncome);
   const coverage = target > 0 ? incomeToday / target : null;
   const gapToday = target > 0 ? Math.max(0, target - incomeToday) : 0;
@@ -313,7 +368,7 @@ export const buildPlan = (answers, now = new Date(), engineOptions = null) => {
 
   return {
     answers: a, inputs, rows, age, year, payoutAge: pa, year55, yearPayout: a.birthYear + pa,
-    raAtPayout, payouts, payout, payoutToday, oaAtPayoutToday, oaMonthlyToday, otherMonthlyToday, sale, incomeToday, spreadTo, oaKeepToday, target, coverage, gapToday,
+    raAtPayout, payouts, payout, payoutToday, oaAtPayoutToday, oaMonthlyToday, otherMonthlyToday, savingsMonthlyToday, savingsAtPayoutToday, sale, incomeToday, spreadTo, oaKeepToday, target, coverage, gapToday,
     frs55, raAt55, frsCoverage, maCoverage, bhs65,
     totalNow: num(a.oa) + num(a.sa) + num(a.ma),
     score, label, parts, watch, series,

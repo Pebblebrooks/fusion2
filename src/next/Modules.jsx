@@ -20,13 +20,14 @@ const signed = (v) => (Math.round(v) === 0 ? 'no change' : `${v > 0 ? '+' : '−
 export function IncomeBar({ p }) {
   const scale = Math.max(p.target, p.incomeToday, 1);
   const w = (v) => `${Math.max(0, (v / scale) * 100)}%`;
-  const other = p.otherMonthlyToday || 0;
+  const other = p.otherMonthlyToday || 0, saved = p.savingsMonthlyToday || 0;
   return (
     <div className="income">
-      <div className="bar" role="img" aria-label={`CPF LIFE ${money(p.payoutToday)} a month, Ordinary Account ${money(p.oaMonthlyToday)} a month${other > 0 ? `, from your home sale ${money(other)} a month` : ''}${p.gapToday > 0 ? `, gap ${money(p.gapToday)} a month` : ''}`}>
+      <div className="bar" role="img" aria-label={`CPF LIFE ${money(p.payoutToday)} a month, Ordinary Account ${money(p.oaMonthlyToday)} a month${other > 0 ? `, from your home sale ${money(other)} a month` : ''}${saved > 0 ? `, from your savings ${money(saved)} a month` : ''}${p.gapToday > 0 ? `, gap ${money(p.gapToday)} a month` : ''}`}>
         <span className="seg-life" style={{ width: w(p.payoutToday) }} />
         {p.oaMonthlyToday > 0 && <span className="seg-oa" style={{ width: w(p.oaMonthlyToday) }} />}
         {other > 0 && <span className="seg-other" style={{ width: w(other) }} />}
+        {saved > 0 && <span className="seg-save" style={{ width: w(saved) }} />}
         {p.gapToday > 0 && <span className="seg-gap" style={{ width: w(p.gapToday) }} />}
         {p.target > 0 && <i className="target" style={{ left: w(p.target) }} />}
       </div>
@@ -34,6 +35,7 @@ export function IncomeBar({ p }) {
         <li><i className="sw life" /><span><b>{money(p.payoutToday)}</b> CPF LIFE <em>for life</em></span></li>
         {p.oaMonthlyToday > 0 && <li><i className="sw oa" /><span><b>{money(p.oaMonthlyToday)}</b> Ordinary Account <em>if spread to age {p.spreadTo || 90}</em></span></li>}
         {other > 0 && <li><i className="sw other" /><span><b>{money(other)}</b> From your home sale <em>if spread to age {p.spreadTo || 90}</em></span></li>}
+        {saved > 0 && <li><i className="sw save" /><span><b>{money(saved)}</b> From your savings outside CPF <em>if spread to age {p.spreadTo || 90}</em></span></li>}
         {p.gapToday > 0 && <li><i className="sw gap" /><span><b>{money(p.gapToday)}</b> gap <em>from other savings</em></span></li>}
       </ul>
     </div>

@@ -53,6 +53,10 @@ export default function WhatIfPanel({ answers, now, onTry, onClose }) {
                     <button type="button" className="btn btn-secondary" onClick={() => onTry(w.topUp.chapter, w.topUp.change)}>Try it in {title(w.topUp.chapter)}</button></>
                   : <p className="muted">Top-ups alone cannot reach your target: they are capped at the retirement sums.</p>}
               </li>
+              {w.startAge && (
+                <li><p className="st-move-name">Start CPF LIFE at {w.startAge.age}</p><p className="small muted">The earliest start age that meets your target. Each year you wait raises your payouts.</p>
+                  <button type="button" className="btn btn-secondary" onClick={() => onTry(w.startAge.chapter, w.startAge.change)}>Try it in {title(w.startAge.chapter)}</button></li>
+              )}
               <li>
                 {w.stopWork?.age
                   ? <><p className="st-move-name">You could stop work at {w.stopWork.age}</p><p className="small muted">The earliest age that still meets your target.</p>
@@ -60,6 +64,13 @@ export default function WhatIfPanel({ answers, now, onTry, onClose }) {
                   : <p className="muted">Working longer alone does not reach your target{w.stopWork?.best ? `: the most is about ${money(w.stopWork.best)} a month` : ''}.</p>}
               </li>
             </ul>
+          </>
+        )}
+        {w.frsTopUp && (
+          <>
+            <h3>Reaching the Full Retirement Sum at 55</h3>
+            <ul className="st-wi-list"><li><p className="st-move-name">Top up {money(w.frsTopUp.amount)} a year in cash</p><p className="small muted">Fills your Retirement Account to the Full Retirement Sum when it is formed at 55.</p>
+              <button type="button" className="btn btn-secondary" onClick={() => onTry(w.frsTopUp.chapter, w.frsTopUp.change)}>Try it in {title(w.frsTopUp.chapter)}</button></li></ul>
           </>
         )}
         <p className="small muted">To compare whole plans side by side, use Compare in the planner.</p>

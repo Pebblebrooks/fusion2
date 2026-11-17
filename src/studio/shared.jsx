@@ -2,8 +2,24 @@
  * Pieces every Studio scene uses: the scene frame (question, answer, levers, show how, next),
  * the income-gap pill, the "save this move" bar and the chapter footer.
  */
+import { createContext, useContext } from 'react';
 import { CHAPTERS, nextChapter, prevChapter } from '../model/studio.js';
 import { money } from '../next/ui.jsx';
+
+/**
+ * Today's or future dollars for headline figures. Future = today's dollars raised with the plan's price
+ * rise to the year the amount applies (`at` = age). Set by the switch in Studio's header.
+ */
+export const DollarsContext = createContext({ future: false, inflation: 0.02, age: 0, birthYear: 0 });
+export function useDollars() {
+  const d = useContext(DollarsContext);
+  const factor = (at) => (d.future ? Math.pow(1 + d.inflation, Math.max(0, at - d.age)) : 1);
+  return {
+    future: d.future,
+    amount: (v, at) => money(Math.round((Number(v) || 0) * factor(at))),
+    label: (at) => (d.future ? `in ${d.birthYear + at} dollars` : "in today's dollars"),
+  };
+}
 
 /** Scene frame: eyebrow, the chapter's question, then the scene's own parts in order. */
 export function Scene({ id, children }) {

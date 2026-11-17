@@ -6,18 +6,19 @@
 import { useMemo } from 'react';
 import { familyScene } from '../model/studio.js';
 import { MoneyField, Slider, Choice, money } from '../next/ui.jsx';
-import { Scene, GapPill, TrialBar, ShowHow, SceneNav } from './shared.jsx';
+import { Scene, GapPill, TrialBar, ShowHow, SceneNav, useDollars } from './shared.jsx';
 
 export default function FamilyChapter({ base, plan, val, lever, trial, onPick, onFact, now }) {
   const s = useMemo(() => familyScene(plan, now), [plan, now]);
+  const $ = useDollars();
   const a = base.answers;
   return (
     <Scene id="family">
       <section className="st-answer panel">
         {s.hasPartner ? (
           <>
-            <p className="st-big"><span className="fig">{money(s.household)}</span> <span className="st-unit">a month for the two of you</span></p>
-            <p className="st-sub">In today's dollars, once both of you are paid ({s.yearBoth}): you {money(s.you)}, your partner {money(s.partner)}.</p>
+            <p className="st-big"><span className="fig">{$.amount(s.household, plan.payoutAge)}</span> <span className="st-unit">a month for the two of you</span></p>
+            <p className="st-sub">{$.future ? `In ${s.yearBoth} dollars (approximate)` : "In today's dollars"}, once both of you are paid ({s.yearBoth}): you {money(s.you)}, your partner {money(s.partner)}.</p>
             <GapPill status={s.status} gap={s.gap} above={s.above} />
           </>
         ) : (

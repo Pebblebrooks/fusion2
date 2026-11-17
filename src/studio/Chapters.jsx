@@ -5,18 +5,20 @@
  * Figures come from src/model/studio.js.
  */
 import { useMemo } from 'react';
-import { buildingScene, turning55Scene, payoutScene } from '../model/studio.js';
+import { buildingScene, turning55Scene, payoutScene, budgetScene } from '../model/studio.js';
 import { RETIREMENT_SUMS_2026, RETIREMENT_SUMS_2027 } from '../policy/cpf2026.js';
-import { Slider, Choice, money, pct } from '../next/ui.jsx';
+import { Slider, Choice, MoneyField, money, pct } from '../next/ui.jsx';
 import SavingsChart from '../next/Chart.jsx';
 import { IncomeBar } from '../next/Modules.jsx';
-import { Scene, GapPill, TrialBar, ShowHow, SceneNav } from './shared.jsx';
+import { Scene, GapPill, TrialBar, ShowHow, SceneNav, useDollars } from './shared.jsx';
 
 const rate = (v) => `${Math.round(v * 1000) / 10}%`;
 
 /* ── Chapter 2: Building ─────────────────────────────────────────────────── */
-export function BuildingChapter({ base, plan, val, lever, trial, onPick }) {
+export function BuildingChapter({ base, plan, val, lever, trial, onPick, onFact }) {
   const s = useMemo(() => buildingScene(plan), [plan]);
+  const b = useMemo(() => budgetScene(plan), [plan]);
+  const $ = useDollars();
   const a = plan.answers;
   const working = a.work !== 'none';
   return (
@@ -26,7 +28,7 @@ export function BuildingChapter({ base, plan, val, lever, trial, onPick }) {
           <p className="st-big"><span className="fig">{money(s.totalNow)}</span> <span className="st-unit">in CPF today</span></p>
         ) : (
           <>
-            <p className="st-big"><span className="fig">{money(s.totalAt)}</span> <span className="st-unit">at {s.until}, in today's dollars</span></p>
+            <p className="st-big"><span className="fig">{$.amount(s.totalAt, s.until)}</span> <span className="st-unit">at {s.until}, {$.label(s.until)}</span></p>
             <p className="st-sub">From {money(s.totalNow)} today{s.multiple ? `: about ${s.multiple.toFixed(1)} times as much` : ''}.</p>
           </>
         )}
@@ -49,9 +51,32 @@ export function BuildingChapter({ base, plan, val, lever, trial, onPick }) {
               <Slider id="l-vc3a" label="Extra to all three accounts each year" value={val('vc3aYearly')} min={0} max={Math.max(20000, val('vc3aYearly'))} step={500} onChange={(v) => lever('vc3aYearly', v)} format={money} />
             </div>
           ) : <p className="muted">Your plan says you are not working, so there is nothing to change here. Cash top-ups are in <b>Turning 55</b>.</p>}
-          <TrialBar {...trial} base={base} plan={plan} />
         </section>
       )}
+
+      <section className="panel st-levers" aria-labelledby="st-outside-h">
+        <h2 id="st-outside-h">Money outside CPF</h2>
+        <p className="muted small">Savings and investments in one pot. The balance today is a fact, saved as you type; saving more is a change to try.</p>
+        <div className="st-lever-grid">
+          <MoneyField id="st-savenow" label="Savings and investments today" value={base.answers.savingsNow} onChange={(v) => onFact({ savingsNow: v })} />
+          <Slider id="l-save" label="Add each year while working" value={val('savingsYearly')} min={0} max={Math.max(60000, val('savingsYearly'))} step={1000} onChange={(v) => lever('savingsYearly', v)} format={money} />
+          <Slider id="l-growth" label="Growth a year, before prices" value={val('savingsGrowth')} min={0} max={8} step={0.5} onChange={(v) => lever('savingsGrowth', v)} format={(v) => `${v}%`} />
+        </div>
+        {b.savingsAtPayout > 0 && <p className="small muted">About {money(b.savingsAtPayout)} at {b.payoutAge}, in today's dollars. Payout shows it as income if you choose.</p>}
+
+        <h3 className="st-sub-h">Monthly cash budget</h3>
+        <div className="st-lever-grid">
+          <MoneyField id="st-spend" label="Spending a month" value={base.answers.monthlySpend} onChange={(v) => onFact({ monthlySpend: v })} hint="Everything except CPF and savings" />
+          <MoneyField id="st-ins" label="Private insurance premiums a year" value={base.answers.insuranceYearly} onChange={(v) => onFact({ insuranceYearly: v })} hint="Paid in cash: life, critical illness, other cover" />
+        </div>
+        {b.entered && (
+          <div className="st-budget">
+            <p>Take-home pay about <b>{money(b.takeHome)}</b>{b.cpf > 0 ? ` (after ${money(b.cpf)} of your own CPF)` : ''}, less spending {money(b.spend)} and insurance {money(b.insurance)}: <b className={b.left >= 0 ? 'gain' : 'danger'}>{b.left >= 0 ? `${money(b.left)} left` : `${money(-b.left)} short`}</b> a month.</p>
+            {b.left > 0 && b.saveYearly !== val('savingsYearly') && <button type="button" className="btn btn-secondary" onClick={() => lever('savingsYearly', b.saveYearly)}>Try saving what's left: {money(b.saveYearly)} a year</button>}
+          </div>
+        )}
+        <TrialBar {...trial} base={base} plan={plan} />
+      </section>
 
       <ShowHow>
         {s.milestones.length > 0 && (
@@ -65,6 +90,7 @@ export function BuildingChapter({ base, plan, val, lever, trial, onPick }) {
           {!s.done && <li>From now to {s.until}, in the dollars of each year: money in {money(s.moneyIn)} (contributions, top-ups and grants), interest {money(s.interest)}, money out {money(s.out)} (home loan, healthcare and other withdrawals). Your CPF on your {s.until}th birthday: {money(s.endNominal)}, which is {money(s.totalAt)} in today's dollars.</li>}
           <li>Interest: {rate(plan.assumptions.oa)} a year on the Ordinary Account and {rate(plan.assumptions.sma)} on the Special, MediSave and Retirement Accounts, plus the extra interest on the first S$60,000.</li>
           <li>Prices are assumed to rise {rate(plan.assumptions.inflation)} a year. {working ? `You stop contributing at ${s.stopWorkAge}.` : ''}</li>
+          <li>Money outside CPF grows at the rate you set and is added to while you work. Windfalls and big medical bills from Later life go in and out of it. Take-home pay uses your own CPF rate for your age and residency, on pay up to S$8,000 a month.</li>
           <li>Extra to all three accounts (voluntary contributions): split like your own contributions. Together with mandatory contributions it cannot pass the CPF annual limit of S$37,740; anything above is left out. No tax relief.</li>
         </ul>
       </ShowHow>
@@ -167,17 +193,19 @@ export function Turning55Chapter({ base, plan, val, lever, trial, onPick }) {
 /* ── Chapter 6: Payout ───────────────────────────────────────────────────── */
 export function PayoutChapter({ base, plan, val, lever, trial, onPick }) {
   const s = useMemo(() => payoutScene(plan), [plan]);
+  const $ = useDollars();
   const minAge = Math.min(70, Math.max(65, plan.age));
   return (
     <Scene id="payout">
       <section className="st-answer panel">
-        <p className="st-big"><span className="fig">{money(s.income)}</span> <span className="st-unit">a month from {s.payoutAge}</span></p>
-        <p className="st-sub">In today's dollars. Payouts start in {s.yearPayout}.</p>
+        <p className="st-big"><span className="fig">{$.amount(s.income, s.payoutAge)}</span> <span className="st-unit">a month from {s.payoutAge}</span></p>
+        <p className="st-sub">{$.future ? `In ${s.yearPayout} dollars, when payouts start.` : `In today's dollars. Payouts start in ${s.yearPayout}.`}</p>
         <IncomeBar p={plan} />
         <p className="st-meaning">
           CPF LIFE ({s.planName} plan) pays <b>{money(s.life)} a month for life</b>.
           {s.oa > 0 && <> Your Ordinary Account adds {money(s.oa)} a month until age {s.spreadTo}, then stops.</>}
           {s.other > 0 && <> Your home sale adds {money(s.other)} a month.</>}
+          {plan.savingsMonthlyToday > 0 && <> Your savings outside CPF add {money(plan.savingsMonthlyToday)} a month until age {s.spreadTo}.</>}
         </p>
         <GapPill status={s.status} gap={s.gap} above={s.above} />
       </section>
@@ -191,6 +219,9 @@ export function PayoutChapter({ base, plan, val, lever, trial, onPick }) {
         </div>
         <Choice label="CPF LIFE plan" name="l-plan" value={val('lifePlan')} onChange={(v) => lever('lifePlan', v)}
           options={[['std', 'Standard'], ['esc', 'Escalating'], ['bas', 'Basic']]} />
+        {plan.savingsAtPayoutToday > 0 && !plan.answers.dieWithZero && (
+          <Choice label={`Use your savings outside CPF (about ${money(plan.savingsAtPayoutToday)}) as income too?`} name="l-spendsave" value={val('spendSavings')} onChange={(v) => lever('spendSavings', v)} options={[[false, 'No, keep them'], [true, 'Yes, spread them']]} />
+        )}
         <TrialBar {...trial} base={base} plan={plan} />
       </section>
 

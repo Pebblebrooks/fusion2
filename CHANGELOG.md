@@ -6,6 +6,18 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 3.4.0-studio.8 — 17 Nov 2026
+Fusion Studio, Phase 3 batch B (studio branch preview only). No change to engine calculations.
+- **Money outside CPF** (Building): savings and investments in one pot, with yearly additions and a growth rate. Payout can count it as income, spread to the same age as the Ordinary Account. The income bar (also in the planner) shows it as its own striped part. A Silver Housing Bonus already counted in the sale is not counted again.
+- **Cash budget** (Building): spending and private insurance premiums against take-home pay (after your own CPF; PR year 1 and 2 graduated rates), with "Try saving what's left".
+- **Life events** (Later life): job loss, career break, pay cut, part-time work, big medical bill and windfall, saved to the plan. Medical bills come from cash savings, since CPF does not let the Ordinary Account pay them.
+- **Die with zero** (Legacy): spend the Ordinary Account and savings down to nothing by a chosen age; CPF LIFE still pays for life.
+- **Today's or future dollars**: a switch in Studio's header changes each chapter's headline figure.
+- **What if**: two more answers worked back from your goals: the earliest CPF LIFE start age that meets your target, and the yearly top-up that reaches the Full Retirement Sum at 55.
+- **Report**: My plan adds "Your plan in numbers" (each chapter's key figure, assumptions, rules version) and prints or saves as PDF.
+- New plan fields `savingsNow`, `savingsYearly`, `savingsGrowth`, `spendSavings`, `monthlySpend`, `insuranceYearly`, `lifeEvents`, `dieWithZero`, `dieWithZeroAge` (defaults leave older plans unchanged).
+- Still held for owner decision: Lease Buyback Scheme, MRSS/MMSS property conditions, CPFIS, the Full Retirement Sum condition on OA-to-MediSave transfers, and register items T and U.
+
 ## 3.4.0-studio.7 — 17 Nov 2026
 Fusion Studio, Phase 3 batch A (studio branch preview only). No change to engine calculations; each new setting was checked against current CPF rules first.
 - **Today:** self-employed members enter yearly net trade income (sets MediSave contributions).

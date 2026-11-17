@@ -15,12 +15,13 @@ import { BuildingChapter, Turning55Chapter, PayoutChapter } from './Chapters.jsx
 import MyPlanChapter from './MyPlan.jsx';
 import { HomeChapter, LaterChapter, LegacyChapter } from './LaterChapters.jsx';
 import WhatIfPanel from './WhatIf.jsx';
+import { DollarsContext } from './shared.jsx';
 import FamilyChapter from './Family.jsx';
 
 const MAX_MOVES = 20;
 
 /* ── Shell ───────────────────────────────────────────────────────────────── */
-function Header({ theme, onTheme, onWhatIf }) {
+function Header({ theme, onTheme, onWhatIf, future, onFuture }) {
   return (
     <header className="app-header">
       <div className="wrap">
@@ -28,6 +29,12 @@ function Header({ theme, onTheme, onWhatIf }) {
         <span className="st-name">Studio</span>
         <span className="brand-beta">PREVIEW</span>
         <div className="header-actions st-actions">
+          {onFuture && (
+            <div className="st-dollars" role="group" aria-label="Show amounts in">
+              <button type="button" aria-pressed={!future} onClick={() => onFuture(false)}>Today's $</button>
+              <button type="button" aria-pressed={future} onClick={() => onFuture(true)}>Future $</button>
+            </div>
+          )}
           {onWhatIf && <button type="button" className="btn btn-secondary" onClick={onWhatIf}>What if…</button>}
           <a className="btn btn-ghost st-back" href="/app/">Back to planner</a>
           <button type="button" className="icon-btn" onClick={onTheme} aria-label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}>
@@ -135,6 +142,9 @@ export default function StudioApp() {
   const flip = () => { const m = theme === 'dark' ? 'light' : 'dark'; setTheme(m); setThemeState(m); };
   // What if panel: a suggestion opens its chapter with the change ready to save or undo.
   const [whatIfOpen, setWhatIfOpen] = useState(false);
+  const [future, setFuture] = useState(() => { try { return localStorage.getItem('fusion_studio_dollars') === 'future'; } catch { return false; } });
+  const pickDollars = (f) => { setFuture(f); try { localStorage.setItem('fusion_studio_dollars', f ? 'future' : 'today'); } catch { /* not kept */ } };
+  const dollars = useMemo(() => ({ future, inflation: plan.assumptions.inflation, age: plan.age, birthYear: plan.answers.birthYear }), [future, plan]);
   const closeWhatIf = useCallback(() => setWhatIfOpen(false), []);
   const tryIt = (id, change) => { pick(id); setTrial(change); setWhatIfOpen(false); };
 
@@ -143,8 +153,9 @@ export default function StudioApp() {
   return (
     <div className="app studio">
       <a className="skip-link" href="#st-main">Skip to content</a>
-      <Header theme={theme} onTheme={flip} onWhatIf={allowed ? () => setWhatIfOpen(true) : null} />
+      <Header theme={theme} onTheme={flip} onWhatIf={allowed ? () => setWhatIfOpen(true) : null} future={future} onFuture={allowed ? pickDollars : null} />
       {allowed && <Journey plan={base} current={chapter} onPick={pick} />}
+      <DollarsContext.Provider value={dollars}>
       <main id="st-main" className="wrap st-main">
         {!allowed && <Locked tier={tier} />}
         {allowed && sample && (
@@ -154,15 +165,16 @@ export default function StudioApp() {
           </p>
         )}
         {allowed && chapter === 'today' && <TodayChapter plan={base} answers={state.answers} onChange={update} sample={sample} onPick={pick} />}
-        {allowed && chapter === 'building' && <BuildingChapter {...props} />}
+        {allowed && chapter === 'building' && <BuildingChapter {...props} onFact={update} />}
         {allowed && chapter === 'turning55' && <Turning55Chapter {...props} />}
         {allowed && chapter === 'family' && <FamilyChapter {...props} onFact={update} />}
         {allowed && chapter === 'home' && <HomeChapter {...props} onFact={update} />}
         {allowed && chapter === 'payout' && <PayoutChapter {...props} />}
-        {allowed && chapter === 'later' && <LaterChapter {...props} />}
+        {allowed && chapter === 'later' && <LaterChapter {...props} onFact={update} />}
         {allowed && chapter === 'legacy' && <LegacyChapter {...props} />}
         {allowed && chapter === 'plan' && <MyPlanChapter plan={base} moves={studio.moves} now={now} onUndo={undo} onRemove={remove} onPick={pick} sample={sample} />}
       </main>
+      </DollarsContext.Provider>
       {allowed && whatIfOpen && <WhatIfPanel answers={state.answers} now={now} onTry={tryIt} onClose={closeWhatIf} />}
       <footer className="wrap st-foot small muted">Fusion 富生 Studio {VERSION_LABEL}</footer>
     </div>
