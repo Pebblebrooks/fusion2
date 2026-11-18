@@ -6,6 +6,22 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 4.0.0 — 18 Nov 2026
+Major version: CPF engine results change for some plans. Owner-approved on 18 Nov 2026 after checking HDB and CPF Board publications (CPF compliance register, corrections 22–28). CPF rules version raised to 2026-11-18, so adviser reviews flag reports made before it.
+
+From now on the version number has three parts and goes up with the size of the change: major (results or saved-plan meaning change), minor (new features, same results), patch (fixes and wording).
+
+- **Lease Buyback Scheme (22)**: worked out from HDB's rules instead of entered amounts. From 65, your share of the net proceeds first tops up your Retirement Account to the Full Retirement Sum (one owner) or the Basic Retirement Sum (two or more owners), a little less from 70 and 80. Household cash above S$100,000 tops up each owner to the Full Retirement Sum; the rest is cash. Cash bonus of S$1 per S$2 / S$4 / S$8 topped up by flat type, up to S$30,000 / S$15,000 / S$7,500 at S$60,000. The monthly "LBS payout" is removed: HDB pays none. Saved plans that used LBS have their old cash and RA amounts added together as the proceeds. New in Studio's Home chapter; the classic planner asks for proceeds, owners and flat type.
+- **MRSS and MMSS (23)**: the matching grants now also need "own no more than one property and live in a home with an annual value of S$21,000 or less" (yes by default).
+- **CPF Investment Scheme (24)**: investments are now held as a balance with your own expected return (not guaranteed; can be negative), a sale age you choose (none by default) and an optional one-off fall as a stress test. They are not sold at 55 and are not used to form the Retirement Account. On sale, OA investments return to the OA; SA investments to the SA before 55, and from 55 to the RA up to your Full Retirement Sum, then the OA. Unsold investments count in Studio's Legacy. New in Studio's Building chapter and the classic planner.
+- **OA to MediSave transfers (24b)**: only once the Full Retirement Sum is set aside (or the Basic Retirement Sum with property).
+- **Ordinary Account from 55 (25)**: until the Full Retirement Sum is set aside, OA savings you cannot withdraw are moved to the Retirement Account when you make a withdrawal, and (born 1958 or later) when payouts start, which raises CPF LIFE. Before, withdrawals could take any OA savings and Studio paid the whole OA out as income. Two recorded test profiles change from 65 (S$41,666 and S$56,641 moved).
+- **Transfers to loved ones (26, 27; items T and U)**: property counts towards the Full Retirement Sum as the CPF used for it plus interest, or a pledge, only if the lease lasts you to 95, and only for what it covers. From 55 your own (cohort) sums apply. Siblings and in-laws can only receive Ordinary Account savings from 55. Below 55, net CPFIS investments count towards the Full Retirement Sum. A recipient's top-up limit can be entered.
+- The Lease Buyback top-up is applied on the birthday, so a Lease Buyback in the year payouts start raises CPF LIFE. Top-ups after payouts start do not yet raise payouts in Fusion (stated on screen; open item V).
+- Studio no longer counts Ordinary Account savings twice: what CPF moves to the RA at payout start is taken out of the OA income.
+- **Classic planner fix (28)**: 13 fields the engine reads were missing from the list that triggers a recalculation (including education and loved-one transfer fields), so changing them could leave old results on screen.
+- Studio work from 3.4.0-studio.1 to studio.8 is included (studio branch; not yet on the live site).
+
 ## 3.4.0-studio.8 — 17 Nov 2026
 Fusion Studio, Phase 3 batch B (studio branch preview only). No change to engine calculations.
 - **Money outside CPF** (Building): savings and investments in one pot, with yearly additions and a growth rate. Payout can count it as income, spread to the same age as the Ordinary Account. The income bar (also in the planner) shows it as its own striped part. A Silver Housing Bonus already counted in the sale is not counted again.

@@ -7,11 +7,8 @@
  *   - The student repays the amount withdrawn plus the interest it would have earned, into the member's
  *     Ordinary Account, over up to 12 years, usually starting one year after the course ends.
  *
- * CPF transfers to loved ones (from the Ordinary Account, then the Retirement Account from 55)
- *   - The member keeps back a retirement sum first: for a spouse, the current Basic Retirement Sum;
- *     for parents or grandparents, the current Full Retirement Sum, or the Basic Retirement Sum if the
- *     member owns a property that covers the rest of the Full Retirement Sum; for siblings and
- *     in-laws, the current Full Retirement Sum. Transfers get no tax relief.
+ * CPF transfers to loved ones: see lovedOneTransfer below (register corrections 21, 26, 27).
+ *   Transfers get no tax relief.
  */
 import { CPF_RATES } from '../policy/cpf2026.js';
 
@@ -60,13 +57,24 @@ export const eduLoanYear = (loan, { age, repayFrom, years = MAX_EDU_REPAY_YEARS,
 
 /**
  * How much of a requested transfer to a loved one CPF allows this year, and from which account.
- * Below 55 only Ordinary Account savings can go; from 55, Ordinary Account first, then Retirement Account.
+ * CPF Board transfer terms:
+ *   - Spouse: savings after the Basic Retirement Sum. Below 55 from the OA only; from 55 OA, then RA.
+ *   - Parents and grandparents: savings after the Full Retirement Sum, which property (CPF used plus
+ *     accrued interest, or a pledge, lease to 95) can make up down to the Basic Retirement Sum.
+ *     Below 55 from the OA only; from 55 OA, then RA.
+ *   - Siblings and in-laws ('other'): OA savings after the Full Retirement Sum; property does not count.
+ *   - Below 55 the sums are the current year's and savings include the net amount invested under CPFIS;
+ *     from 55 they are the member's own (cohort) sums.
+ *   - The recipient can only take up to their top-up limit (`recipientRoom`; current FRS less SA below
+ *     55, current ERS less RA from 55). Infinity when not known.
  */
-export const lovedOneTransfer = ({ amount, age, oa, sa = 0, ra = 0, relation = 'parent', ownsProperty = false, propertyValue = 0, brs, frs }) => {
-  const savings = age < 55 ? oa + sa : oa + ra;
-  const propertyRoute = relation === 'parent' && ownsProperty && propertyValue >= frs - brs;
-  const keep = relation === 'spouse' || propertyRoute ? brs : frs;
-  const total = Math.max(0, Math.min(amount, savings - keep, age < 55 ? oa : oa + ra));
+export const lovedOneTransfer = ({ amount, age, oa, sa = 0, ra = 0, relation = 'parent', property = 0, netInvested = 0,
+  brs, frs, recipientRoom = Infinity }) => {
+  const savings = age < 55 ? oa + sa + netInvested : oa + ra;
+  const keep = relation === 'spouse' ? brs : relation === 'parent' ? Math.max(brs, frs - Math.max(0, property)) : frs;
+  const fromRaAllowed = age >= 55 && relation !== 'other';
+  const room = Math.max(0, Number.isFinite(recipientRoom) ? recipientRoom : Infinity);
+  const total = Math.max(0, Math.min(amount, savings - keep, fromRaAllowed ? oa + ra : oa, room));
   const fromOa = Math.min(total, oa);
   return { fromOa, fromRa: total - fromOa, total, keep };
 };

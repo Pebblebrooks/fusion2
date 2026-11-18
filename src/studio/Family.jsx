@@ -79,9 +79,11 @@ export default function FamilyChapter({ base, plan, val, lever, trial, onPick, o
             <Choice label="To" name="l-rel" value={val('lovedRelation')} onChange={(v) => lever('lovedRelation', v)} options={[['parent', 'Parents or grandparents'], ['spouse', 'Spouse'], ['other', 'Sibling or in-law']]} />
             <Slider id="l-givefrom" label="Starting when you are" value={val('lovedFromAge') || plan.age} min={plan.age} max={80} step={1} onChange={(v) => lever('lovedFromAge', v)} format={(v) => `${v}`} />
             <Slider id="l-giveyears" label="For how many years" value={val('lovedYears')} min={1} max={20} step={1} onChange={(v) => lever('lovedYears', v)} format={(v) => `${v}`} />
+            <MoneyField id="l-giveroom" label="How much more their account can take (if known)" value={val('lovedRecipientRoom')} onChange={(v) => lever('lovedRecipientRoom', v)}
+              hint="Under 55: the Full Retirement Sum less their Special Account. From 55: the Enhanced Retirement Sum less their Retirement Account. Leave at 0 if you don't know." />
           </>}
         </div>
-        {s.loved && <p className="small muted">{money(s.loved.sent)} transferred in all{s.loved.short > 0 ? `; ${money(s.loved.short)} less than asked, because CPF keeps back your ${s.loved.relation === 'spouse' ? 'Basic' : 'Full'} Retirement Sum first` : ''}. CPF transfers get no tax relief.</p>}
+        {s.loved && <p className="small muted">{money(s.loved.sent)} transferred in all{s.loved.short > 0 ? `; ${money(s.loved.short)} less than asked: CPF keeps back your ${s.loved.relation === 'spouse' ? 'Basic' : s.loved.relation === 'parent' ? 'Full (or Basic, with enough CPF used for your home)' : 'Full'} Retirement Sum first${val('lovedRecipientRoom') > 0 ? ", and your loved one can only take up to their limit" : ''}${s.loved.relation === 'other' && plan.age >= 55 ? '; to siblings and in-laws only Ordinary Account savings can go' : ''}` : ''}. CPF transfers get no tax relief.</p>}
 
         <h3 className="st-sub-h">Dependants' Protection Scheme</h3>
         <Choice label="Life cover for your family, paid from CPF until 65" name="l-dps" value={val('dpsCover')} onChange={(v) => lever('dpsCover', v)} options={[[true, 'Keep it'], [false, 'Opt out']]} />

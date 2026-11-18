@@ -70,6 +70,18 @@ export const DEFAULT_ANSWERS = {
   dpsCover: true,          // Dependants' Protection Scheme: premiums from CPF until 65 (opt out = false)
   hpsYearly: 0,            // Home Protection Scheme premium a year, from CPF, while the HDB loan runs (to 65 at most)
   pledge: false,           // property pledge at 55: only the Basic Retirement Sum goes to the RA; the rest stays in the OA
+  // CPF rules added 18 Nov 2026 (register corrections 22–27); defaults leave older plans unchanged
+  lbsAge: 0,               // Lease Buyback Scheme: age you sell part of the lease to HDB (0 = no; 65 or older)
+  lbsProceeds: 0,          // your share of the net proceeds, in today's dollars
+  lbsOwners: 1,            // 1, or 2 for two or more owners
+  lbsFlat: '4r',           // '3r' (3-room or smaller), '4r', '5r' (5-room or bigger)
+  cpfisHeld: 0,            // CPF Investment Scheme (Ordinary Account) investments held today
+  cpfisYearly: 0,          // more invested from the Ordinary Account each year (only OA above S$20,000 can be)
+  cpfisReturn: 4,          // expected return % a year: not guaranteed, may be negative
+  cpfisSellAge: 0,         // age you sell (0 = keep them); the money returns to your Ordinary Account
+  cpfisFallPct: 0,         // stress test only: a one-off fall the year before you sell
+  matchedPropertyOk: true, // own no more than one property, home annual value S$21,000 or less (MRSS / MMSS grants)
+  lovedRecipientRoom: 0,   // the loved one's top-up limit today, if known (0 = not checked)
   // Money outside CPF (one pot: savings and investments), the cash budget, life events, die with zero
   savingsNow: 0,           // savings and investments outside CPF today
   savingsYearly: 0,        // added each year while working
@@ -151,6 +163,8 @@ export const toEngineInputs = (answers, now = new Date()) => {
     hpsAnnualPremium: a.ownsHome && num(a.housingMonthly) > 0 ? num(a.hpsYearly) : 0,
     ...pledgeInputs(a),
     ...familyInputs(a, age),
+    ...cpfisInputs(a, age),
+    matchedPropertyOk: a.matchedPropertyOk !== false,
     currentPrivateAssets: num(a.savingsNow), annualPrivateSaving: num(a.savingsYearly), privateAssetGrowthRate: clamp(num(a.savingsGrowth, 2.5), -5, 12),
     // Medical bills come from cash savings: CPF does not let the Ordinary Account pay them.
     lifeEvents: cleanLifeEvents(a.lifeEvents, age).map((e, i) => ({ id: `s${i}`, type: e.type, startAge: e.startAge, endAge: e.endAge,
@@ -195,6 +209,16 @@ export const cleanLifeEvents = (list, age = 0) => (Array.isArray(list) ? list : 
  */
 const pledgeInputs = (a) => ({ usePropertyPledge: !!a.pledge && !!a.ownsHome });
 
+/** CPF Investment Scheme (Ordinary Account): holdings, yearly amount, return, sale age, stress fall. */
+const cpfisInputs = (a, age) => {
+  const sell = num(a.cpfisSellAge) > age ? clamp(num(a.cpfisSellAge), age + 1, 95) : 0;
+  return {
+    cpfisOaHeld: num(a.cpfisHeld), cpfisOaAmount: num(a.cpfisYearly), cpfisOaFreq: 'annual',
+    cpfisReturn: clamp(num(a.cpfisReturn, 4), -10, 12), cpfisSellAge: sell,
+    cpfisFallPct: clamp(num(a.cpfisFallPct), 0, 80), cpfisFallAge: sell ? sell - 1 : (num(a.cpfisFallPct) > 0 ? Math.max(age, 64) : 0),
+  };
+};
+
 /**
  * Family answers → engine inputs. Tuition is entered in today's dollars and raised with prices to the
  * year fees start; the engine pays it from the OA, limits it to what CPF allows, and credits the
@@ -209,6 +233,7 @@ const familyInputs = (a, age) => {
     oaEduStartAge: start, oaEduRepayYears: clamp(num(a.eduRepayYears, 12), 1, 12),
     oaToLovedOneYearly: give, lovedOneRelation: ['parent', 'spouse', 'other'].includes(a.lovedRelation) ? a.lovedRelation : 'parent',
     lovedOneFromAge: give > 0 ? clamp(num(a.lovedFromAge) || age, age, 95) : 0, lovedOneYears: clamp(num(a.lovedYears, 5), 1, 40),
+    lovedOneRecipientRoom: num(a.lovedRecipientRoom),
   };
 };
 
@@ -217,6 +242,19 @@ const propertyInputs = (a, age, pr) => {
   if (!a.ownsHome || num(a.homeValue) <= 0) return { propertyValue: 0, includeProperty: false };
   const sellAge = num(a.sellHomeAge) > age ? clamp(num(a.sellHomeAge), age + 1, 95) : 0;
   const shb = !!a.shb && sellAge >= SHB.minAge && !pr;
+  // Lease Buyback Scheme: only when keeping the home (no sale), from 65, citizens. Not with the Silver Housing Bonus.
+  const lbsAt = !sellAge && !pr && num(a.lbsAge) >= 65 ? clamp(num(a.lbsAge), Math.max(65, age), 95) : 0;
+  const lbs = lbsAt > 0 && num(a.lbsProceeds) > 0;
+  if (lbs) {
+    const grow = Math.pow(1 + clamp(num(a.inflation, 2), 0, 6) / 100, lbsAt - age);
+    return {
+      propertyValue: num(a.homeValue), propertyGrowthRate: clamp(num(a.homeGrowth, 2), -2, 8), includeProperty: true,
+      propertyLeasehold: false, housingCpfUsedToDate: num(a.cpfUsedForHome), sellPropertyAge: 0, loanOwedAtSale: 0,
+      propMonetiseEnabled: true, propMonetiseScheme: 'lbs', propMonetiseAge: lbsAt, propMonetiseCashProceeds: 0, propMonetiseRaTopup: 0,
+      lbsProceeds: Math.round(num(a.lbsProceeds) * grow), lbsOwners: num(a.lbsOwners) > 1 ? 2 : 1,
+      lbsFlat: ['3r', '4r', '5r'].includes(a.lbsFlat) ? a.lbsFlat : '4r',
+    };
+  }
   return {
     propertyValue: num(a.homeValue), propertyGrowthRate: clamp(num(a.homeGrowth, 2), -2, 8), includeProperty: true,
     propertyLeasehold: false, housingCpfUsedToDate: num(a.cpfUsedForHome), sellPropertyAge: sellAge,
@@ -265,7 +303,9 @@ export const buildPlan = (answers, now = new Date(), engineOptions = null) => {
   const payoutToday = Math.round(toToday(payout, Math.max(pa, age)));
   // Ordinary Account savings at payout age, spread evenly to age 90 (they keep earning 2.5%).
   // CPF LIFE is for life; this part is not, so the screens always show the two separately.
-  const oaAtPayoutToday = Math.round(toToday(byAge.get(Math.max(pa, age) - 1)?.oa ?? num(a.oa), Math.max(pa, age)));
+  // Less what CPF moves to the RA when payouts start (it is already in the CPF LIFE premium).
+  const oaBeforePayout = (byAge.get(Math.max(pa, age) - 1)?.oa ?? num(a.oa)) - num(payRow?.yearOaToRa);
+  const oaAtPayoutToday = Math.round(toToday(Math.max(0, oaBeforePayout), Math.max(pa, age)));
   const spreadTo = clamp(num(a.oaSpreadTo, OA_SPREAD_TO_AGE), Math.max(pa, age) + 1, 100);
   const oaKeepToday = Math.min(oaAtPayoutToday, Math.max(0, num(a.oaKeep)));
   const months = Math.max(12, (spreadTo - Math.max(pa, age)) * 12);
@@ -366,8 +406,22 @@ export const buildPlan = (answers, now = new Date(), engineOptions = null) => {
     return { age: r.age, oa: r.oa / d, retire: (r.sa + r.ra) / d, ma: r.ma / d, total: r.total / d };
   });
 
+  // ── Scheme summaries in today's dollars (Lease Buyback, OA moved at payout start, CPFIS) ─────────
+  const deflateAt = (v, atAge) => Math.round(num(v) / Math.pow(1 + infl, yearsTo(atAge + 1)));
+  const lbsRow = rows.find((r) => r.lbsTopUp !== undefined);
+  const lbs = lbsRow ? { age: lbsRow.age, year: a.birthYear + lbsRow.age, topUp: deflateAt(lbsRow.lbsTopUp, lbsRow.age), cash: deflateAt(lbsRow.lbsCash, lbsRow.age),
+    bonus: deflateAt(lbsRow.lbsBonus, lbsRow.age), requirement: deflateAt(lbsRow.lbsRequirement, lbsRow.age) } : null;
+  const payStart = byAge.get(Math.max(pa, age));
+  const oaToRaAtPayoutToday = payStart ? deflateAt(payStart.yearOaToRa, payStart.age) : 0;
+  const sellRow = rows.find((r) => num(r.yearCpfisIn) > 0);
+  const cpfis = (num(a.cpfisHeld) + num(a.cpfisYearly) > 0) ? {
+    soldAt: sellRow ? sellRow.age : null, soldToday: sellRow ? deflateAt(sellRow.yearCpfisIn, sellRow.age) : 0,
+    atPayoutToday: payStart ? deflateAt(payStart.cpfisValue, payStart.age) : 0,
+    investedToday: Math.round(rows.filter((r) => r.age >= age && (!sellRow || r.age <= sellRow.age)).reduce((t, r) => t + num(r.yearCpfisOut) / Math.pow(1 + infl, yearsTo(r.age + 1)), num(a.cpfisHeld))),
+  } : null;
+
   return {
-    answers: a, inputs, rows, age, year, payoutAge: pa, year55, yearPayout: a.birthYear + pa,
+    answers: a, inputs, rows, age, year, payoutAge: pa, year55, yearPayout: a.birthYear + pa, lbs, oaToRaAtPayoutToday, cpfis,
     raAtPayout, payouts, payout, payoutToday, oaAtPayoutToday, oaMonthlyToday, otherMonthlyToday, savingsMonthlyToday, savingsAtPayoutToday, sale, incomeToday, spreadTo, oaKeepToday, target, coverage, gapToday,
     frs55, raAt55, frsCoverage, maCoverage, bhs65,
     totalNow: num(a.oa) + num(a.sa) + num(a.ma),
@@ -481,6 +535,9 @@ export const stressTests = (answers, now = new Date()) => {
   ];
   if (a.work !== 'none' && num(a.stopWorkAge) - 5 > base.age) cases.push(['stop', `You stop work at ${num(a.stopWorkAge) - 5}, five years early`, { stopWorkAge: num(a.stopWorkAge) - 5 }]);
   if (a.work === 'employee' && num(a.bonusMonths) > 0) cases.push(['bonus', 'No more bonuses', { bonusMonths: 0 }]);
+  if (num(a.cpfisHeld) + num(a.cpfisYearly) > 0) {
+    cases.push(['invest', num(a.cpfisSellAge) > 0 ? 'Your CPF investments fall 30% the year before you sell' : 'Your CPF investments fall 30% at 64', { cpfisFallPct: 30 }]);
+  }
   return {
     base,
     cases: cases.map(([key, label, change]) => {

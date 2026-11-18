@@ -80,6 +80,26 @@ export function HomeChapter({ base, plan, val, lever, trial, onPick, onFact, now
             </>
           )}
           {selling && !s.shbOpen && <p className="muted small">The Silver Housing Bonus is for Singapore Citizens selling at {s.shbMinAge} or older and moving to a 3-room or smaller HDB flat.</p>}
+          {!selling && a.status === 'SC' && (
+            <>
+              <h3 className="st-sub-h">Lease Buyback Scheme</h3>
+              <Choice label="Sell the tail-end of your HDB flat's lease to HDB and keep living in it?" name="st-lbs" value={val('lbsAge') > 0}
+                onChange={(v) => lever('lbsAge', v ? Math.max(65, age, plan.payoutAge) : 0)} options={[[false, 'No'], [true, 'Yes']]} />
+              {val('lbsAge') > 0 && (
+                <div className="st-lever-grid">
+                  <Slider id="l-lbsage" label="When you are" value={val('lbsAge')} min={Math.max(65, age)} max={90} step={1} onChange={(v) => lever('lbsAge', v)} format={(v) => `${v}`} />
+                  <MoneyField id="l-lbsproc" label="Your share of the net proceeds" value={val('lbsProceeds')} onChange={(v) => lever('lbsProceeds', v)} suffix="today's prices" hint="HDB's estimate for the lease you sell, less any loan. Ask HDB for a figure." />
+                  <Choice label="Owners" name="st-lbsown" value={val('lbsOwners') > 1 ? 2 : 1} onChange={(v) => lever('lbsOwners', v)} options={[[1, 'Only you'], [2, 'Two or more']]} />
+                  <Choice label="Flat" name="st-lbsflat" value={val('lbsFlat')} onChange={(v) => lever('lbsFlat', v)} options={[['3r', '3-room or smaller'], ['4r', '4-room'], ['5r', '5-room or bigger']]} />
+                </div>
+              )}
+              {val('lbsAge') > 0 && plan.lbs && (
+                <p className="st-sub">At {plan.lbs.age}: <b>{money(plan.lbs.topUp)}</b> to your Retirement Account for higher CPF LIFE payouts, <b>{money(plan.lbs.cash)}</b> in cash and a <b>{money(plan.lbs.bonus)}</b> cash bonus, in today's dollars. The cash goes into your savings outside CPF.</p>
+              )}
+              {val('lbsAge') > 0 && val('lbsProceeds') <= 0 && <p className="muted small">Enter your share of the proceeds to see the top-up and bonus.</p>}
+              {val('lbsAge') > plan.payoutAge && <p className="muted small">CPF uses a top-up made after payouts start to raise them from then on. Fusion counts it only when the Lease Buyback is in the year payouts start ({plan.payoutAge}), so this estimate is low.</p>}
+            </>
+          )}
           <TrialBar {...trial} base={base} plan={plan} />
         </section>
       )}
@@ -109,6 +129,7 @@ export function HomeChapter({ base, plan, val, lever, trial, onPick, onFact, now
         ) : <p className="muted">Choose Sell it above to see where the money would go.</p>}
         <ul className="st-notes">
           <li>Silver Housing Bonus: HDB pays S$1 in cash for every S$2 committed to the Retirement Account, up to S$30,000, plus S$10,000 for a 2-room or smaller flat. Household income must be S$14,000 a month or less; HDB confirms the amount.</li>
+          <li>Lease Buyback Scheme (HDB, from 65): your share of the proceeds first tops up your Retirement Account to the Full Retirement Sum if you are the only owner, or the Basic Retirement Sum if there are two or more owners (a little less from 70 and from 80). If the household would keep more than S$100,000 in cash, the rest tops up each owner to the Full Retirement Sum. HDB pays a cash bonus of S$1 for every S$2, S$4 or S$8 topped up (3-room or smaller, 4-room, 5-room or bigger), up to S$30,000, S$15,000 or S$7,500 at S$60,000 of household top-ups. HDB pays no monthly income: the income comes from CPF LIFE. With two or more owners Fusion assumes they all put in the same. You cannot have both this and the Silver Housing Bonus.</li>
           <li>Home value is assumed to rise {a.homeGrowth}% a year. Change it in the planner under Property.</li>
         </ul>
       </ShowHow>
@@ -236,11 +257,12 @@ export function LegacyChapter({ base, plan, val, lever, trial, onPick }) {
               <span className="st-legacy-bar" aria-hidden="true">
                 <span className="seg s2" style={{ width: `${(x.oa / Math.max(1, s.left[0].total)) * 100}%` }} />
                 {x.life > 0 && <span className="seg s1" style={{ width: `${(x.life / Math.max(1, s.left[0].total)) * 100}%` }} />}
+                {x.inv > 0 && <span className="seg s3" style={{ width: `${(x.inv / Math.max(1, s.left[0].total)) * 100}%` }} />}
               </span>
               <b className="fig">{money(x.total)}</b></li>
           ))}
         </ul>
-        <p className="st-key-line small"><span className="sw s2" aria-hidden="true" /> Ordinary Account savings <span className="sw s1" aria-hidden="true" /> CPF LIFE premium not yet paid out</p>
+        <p className="st-key-line small"><span className="sw s2" aria-hidden="true" /> Ordinary Account savings <span className="sw s1" aria-hidden="true" /> CPF LIFE premium not yet paid out{s.left.some((x) => x.inv > 0) && <> <span className="sw s3" aria-hidden="true" /> CPF investments not yet sold</>}</p>
         <p className="st-meaning">CPF savings do not pass by your will. They go to the people you nominate with CPF, or are distributed by the Public Trustee if you have not nominated anyone.</p>
       </section>
 
@@ -261,6 +283,7 @@ export function LegacyChapter({ base, plan, val, lever, trial, onPick }) {
           <li>Ordinary Account: {money(s.startToday)} at {s.from}, paid out at {money(s.monthly)} a month to age {s.spreadTo}{s.keep > 0 ? `, keeping ${money(s.keep)} untouched` : ''}, still earning 2.5% interest. What is left is shown in today's dollars.</li>
           <li>CPF LIFE: on Standard and Escalating plans, if you die before payouts add up to the premium (your Retirement Account when payouts start), the rest goes to your nominees. Shown here without interest, in today's dollars.</li>
           <li>Die with zero spreads your Ordinary Account and your savings outside CPF evenly to the age you choose, keeping nothing back, so more is spent while you are alive. CPF LIFE still pays for life, so income does not stop at that age; what you spread does.</li>
+          <li>CPF investments (CPFIS) you have not sold are counted at their value then, on your expected return. Their value can be lower.</li>
           <li>Retirement Account savings not used for CPF LIFE, MediSave and any other CPF balances also go to your nominees; they are not shown here.</li>
         </ul>
       </ShowHow>

@@ -64,6 +64,24 @@ export function BuildingChapter({ base, plan, val, lever, trial, onPick, onFact 
         </div>
         {b.savingsAtPayout > 0 && <p className="small muted">About {money(b.savingsAtPayout)} at {b.payoutAge}, in today's dollars. Payout shows it as income if you choose.</p>}
 
+        <h3 className="st-sub-h">CPF investments (CPFIS)</h3>
+        <p className="muted small">Ordinary Account savings above S$20,000 can be invested. Returns are not guaranteed and can be negative. Investments are not sold at 55 and do not count towards your Retirement Account; when you sell, the money goes back to your Ordinary Account. Later life tests a 30% fall.</p>
+        <div className="st-lever-grid">
+          <MoneyField id="st-cpfisheld" label="Invested today" value={base.answers.cpfisHeld} onChange={(v) => onFact({ cpfisHeld: v })} />
+          <Slider id="l-cpfisy" label="Invest more each year" value={val('cpfisYearly')} min={0} max={Math.max(30000, val('cpfisYearly'))} step={1000} onChange={(v) => lever('cpfisYearly', v)} format={money} />
+          {(base.answers.cpfisHeld > 0 || val('cpfisYearly') > 0) && (
+            <>
+              <Slider id="l-cpfisr" label="Expected return a year" value={val('cpfisReturn')} min={-5} max={10} step={0.5} onChange={(v) => lever('cpfisReturn', v)} format={(v) => `${v}%`} />
+              <Slider id="l-cpfiss" label="Sell at age (0 = keep)" value={val('cpfisSellAge')} min={0} max={90} step={1} onChange={(v) => lever('cpfisSellAge', v > 0 && v <= plan.age ? plan.age + 1 : v)} format={(v) => (v > 0 ? `${v}` : 'Keep')} />
+            </>
+          )}
+        </div>
+        {plan.cpfis && (
+          <p className="small muted">{plan.cpfis.soldAt
+            ? `Sold at ${plan.cpfis.soldAt} for about ${money(plan.cpfis.soldToday)} in today's dollars, back into your CPF.`
+            : `Worth about ${money(plan.cpfis.atPayoutToday)} at ${plan.payoutAge} in today's dollars. Kept invested, it is not CPF LIFE income; it goes to your family.`}</p>
+        )}
+
         <h3 className="st-sub-h">Monthly cash budget</h3>
         <div className="st-lever-grid">
           <MoneyField id="st-spend" label="Spending a month" value={base.answers.monthlySpend} onChange={(v) => onFact({ monthlySpend: v })} hint="Everything except CPF and savings" />
@@ -114,7 +132,7 @@ function SumsMeter({ ra, sums }) {
   );
 }
 
-export function Turning55Chapter({ base, plan, val, lever, trial, onPick }) {
+export function Turning55Chapter({ base, plan, val, lever, trial, onPick, onFact }) {
   const s = useMemo(() => turning55Scene(plan), [plan]);
   const g = plan.assumptions.sumGrowth;
   return (
@@ -154,6 +172,10 @@ export function Turning55Chapter({ base, plan, val, lever, trial, onPick }) {
             {plan.age < 55 && <Slider id="l-oasa" label="Move from Ordinary to Special Account each year" value={val('oaToSaYearly')} min={0} max={Math.max(20000, val('oaToSaYearly'))} step={500} onChange={(v) => lever('oaToSaYearly', v)} format={money} />}
           </div>
         )}
+        {val('topUpYearly') > 0 && base.answers.status === 'SC' && onFact && (
+          <Choice label="Government matching grant (MRSS): do you own no more than one property, and live in a home with an annual value of S$21,000 or less?"
+            name="st-mrss" value={base.answers.matchedPropertyOk !== false} onChange={(v) => onFact({ matchedPropertyOk: v })} options={[[true, 'Yes'], [false, 'No']]} />
+        )}
         {!s.done && (
           <>
             <h3 className="st-sub-h">Taking money out at 55</h3>
@@ -179,7 +201,8 @@ export function Turning55Chapter({ base, plan, val, lever, trial, onPick }) {
         </table>
         <ul className="st-notes">
           <li>At 55 a Retirement Account is opened. Special Account savings go in first, then Ordinary Account savings, up to the Full Retirement Sum. Since 2025 the Special Account then closes; what is left in it moves to the Ordinary Account.</li>
-          <li>From 55 you can take out savings above the Full Retirement Sum, or up to S$5,000 if you have less. With a property pledge you can take out savings above the Basic Retirement Sum; that option is not shown here.</li>
+          <li>Matched Retirement Savings Scheme: from 55, if your Retirement Account is below the Basic Retirement Sum, your income is S$4,000 a month or less, you own no more than one property and your home's annual value is S$21,000 or less, the Government matches cash top-ups dollar for dollar, up to S$2,000 a year and S$20,000 in all. Matched top-ups get no tax relief. The same property and income conditions apply to the Matched MediSave Scheme.</li>
+          <li>From 55 you can take out savings above the Full Retirement Sum, or up to S$5,000 if you have less. Until the Full Retirement Sum is set aside, Ordinary Account savings you cannot take out are moved to your Retirement Account when you make a withdrawal, and again when your payouts start. With a property pledge you can take out savings above the Basic Retirement Sum; that option is not shown here.</li>
           <li>Official sums: 2026 BRS {money(RETIREMENT_SUMS_2026.BRS)}, FRS {money(RETIREMENT_SUMS_2026.FRS)}, ERS {money(RETIREMENT_SUMS_2026.ERS)}; 2027 FRS {money(RETIREMENT_SUMS_2027.FRS)}. Later years are assumed to rise {rate(g)} a year.</li>
           <li>Cash top-ups are accepted up to the Full Retirement Sum before 55 and up to the Enhanced Retirement Sum after 55. Tax relief applies to up to S$8,000 a year for top-ups to your own account.</li>
           <li>Property pledge: if you own a property with enough lease, you can pledge it at 55 so only the Basic Retirement Sum goes into your Retirement Account. The rest stays in your Ordinary Account, where "Take out at 55" can withdraw it. CPF LIFE payouts are then lower. If you sell the home later, the pledged amount must be restored.</li>
@@ -206,6 +229,7 @@ export function PayoutChapter({ base, plan, val, lever, trial, onPick }) {
           {s.oa > 0 && <> Your Ordinary Account adds {money(s.oa)} a month until age {s.spreadTo}, then stops.</>}
           {s.other > 0 && <> Your home sale adds {money(s.other)} a month.</>}
           {plan.savingsMonthlyToday > 0 && <> Your savings outside CPF add {money(plan.savingsMonthlyToday)} a month until age {s.spreadTo}.</>}
+          {plan.oaToRaAtPayoutToday > 0 && <> When payouts start, CPF moves {money(plan.oaToRaAtPayoutToday)} from your Ordinary Account to your Retirement Account, because you have not set aside the Full Retirement Sum. That raises CPF LIFE.</>}
         </p>
         <GapPill status={s.status} gap={s.gap} above={s.above} />
       </section>
@@ -236,6 +260,7 @@ export function PayoutChapter({ base, plan, val, lever, trial, onPick }) {
           <li>Standard: level payouts for life. Escalating: starts lower and rises 2% a year. Basic: a smaller part goes into the CPF LIFE pool, so payouts are lower and can fall once the Retirement Account runs down, usually around 90.</li>
           <li>Starting later, up to 70, raises payouts for every year you wait.</li>
           <li>Ordinary Account income is your Ordinary Account at {s.payoutAge} paid out evenly to age {s.spreadTo}, still earning interest. It is not for life, so it is shown apart from CPF LIFE.</li>
+          <li>For members born in 1958 or later who have not set aside the Full Retirement Sum, CPF moves Ordinary Account savings to the Retirement Account, up to that sum, when payouts start. Savings you can take out (the S$5,000, and anything above the Full Retirement Sum) stay in the Ordinary Account.</li>
         </ul>
       </ShowHow>
       <SceneNav id="payout" onPick={onPick} />

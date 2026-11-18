@@ -225,4 +225,4 @@ export const getMslPremiumForAge = (age) => {
 };
 
 /** Date the rules in this folder were last checked against official sources. Stamped on advice records. */
-export const RULES_VERSION = '2026-11-17';
+export const RULES_VERSION = '2026-11-18';

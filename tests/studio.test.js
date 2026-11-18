@@ -336,3 +336,22 @@ test('Phase 3 batch B: money outside CPF, die with zero, life events, budget and
   assert.ok(buildPlan({ ...low, topUpYearly: frs.amount }, NOW).frsCoverage >= 0.999);
   for (const k of ['savingsYearly', 'spendSavings', 'dieWithZero']) assert.ok(KEY_CHAPTER[k], k);
 });
+
+test('CPF rules of 18 Nov in Studio: Lease Buyback, CPFIS, payout-start transfer, legacy', () => {
+  const older = { birthYear: 1964, work: 'none', oa: 60000, sa: 140000, ma: 50000, ownsHome: true, homeValue: 450000, targetIncome: 2500 };
+  const lbs = plan({ ...older, lbsAge: 66, lbsProceeds: 90000, lbsFlat: '3r' });
+  assert.ok(lbs.lbs && lbs.lbs.topUp > 0 && lbs.lbs.bonus > 0, 'LBS summary');
+  assert.ok(lbs.payoutToday > plan(older).payoutToday || lbs.lbs.age > lbs.payoutAge, 'top-up raises CPF LIFE when before payouts');
+  assert.equal(plan({ ...older, lbsAge: 66, lbsProceeds: 90000, sellHomeAge: 70 }).lbs, null, 'no LBS when selling');
+  assert.equal(plan({ ...older, status: 'PR3', lbsAge: 66, lbsProceeds: 90000 }).lbs, null, 'citizens only');
+  // Below the FRS at payout: OA moves to the RA when payouts start
+  assert.ok(plan(older).oaToRaAtPayoutToday > 0);
+  // CPFIS: kept investments go to the family; a 30% fall is one of the worse cases
+  const inv = plan({ cpfisHeld: 40000, cpfisReturn: 5 });
+  assert.ok(inv.cpfis && inv.cpfis.atPayoutToday > 40000);
+  assert.ok(legacyScene(inv).at85.inv > 0);
+  assert.ok(laterScene(inv).cases.some((c) => c.key === 'invest'));
+  const sold = plan({ cpfisHeld: 40000, cpfisReturn: 5, cpfisSellAge: 60 });
+  assert.equal(sold.cpfis.soldAt, 60);
+  for (const k of ['lbsAge', 'cpfisYearly', 'cpfisSellAge', 'lovedRecipientRoom']) { assert.ok(KEY_CHAPTER[k], k); assert.ok(!describeChange(k, 1).startsWith(k), k); }
+});

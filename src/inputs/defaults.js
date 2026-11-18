@@ -96,6 +96,14 @@ export const DEFAULT_INPUTS = {
   // CPFIS
   cpfisOaAmount: 0,    // Annual CPFIS investment from OA (OA must be > $20,000)
   cpfisSaAmount: 0,    // Annual CPFIS investment from SA (SA must be > $40,000, pre-55 only)
+  cpfisOaHeld: 0,      // value of CPFIS-OA investments held today
+  cpfisSaHeld: 0,      // value of CPFIS-SA investments held today
+  cpfisReturn: 4,      // expected return % a year (not guaranteed; may be negative)
+  cpfisSellAge: 0,     // age the investments are sold (0 = kept); proceeds return to CPF (schemes.js)
+  cpfisFallPct: 0,     // stress test: one-off market fall %, 0 = none
+  cpfisFallAge: 0,     // age of the fall (0 = the year before the sale)
+  matchedPropertyOk: true, // MRSS/MMSS: owns no more than one property and home annual value ≤ S$21,000
+  oaToRaAtPayout: true,    // CPF Board: OA savings move to the RA up to the FRS when payouts start (born 1958+)
   // Outflows
   housingOutflow: 12000, oaEduLoan: 0, oaEduLoanFreq: 'one-time',
   mortgagePaymentSource: 'cpf',   // 'cpf' | 'cash' — gates engine debit: OA vs private assets
@@ -149,8 +157,9 @@ export const DEFAULT_INPUTS = {
   propMonetiseAge: 65,           // age at which the scheme event occurs (one-time)
   propMonetiseCashProceeds: 0,   // net cash received by member (after CPF refund, stamp duty etc.)
   propMonetiseRaTopup: 0,        // RA top-up component (Silver Housing Bonus CPF portion, or LBS annuity lump-sum)
-  lbsMonthlyPayout: 0,          // LBS: monthly income HDB pays after lease buyback ($/mo); active from propMonetiseAge → lbsPayoutEndAge
-  lbsPayoutEndAge: 85,           // LBS: age when monthly payout stream ends (when sold lease portion expires)
+  lbsProceeds: 0,               // LBS: member's share of the net proceeds from selling the tail-end lease
+  lbsOwners: 1,                 // LBS: number of owners (1, or 2 or more)
+  lbsFlat: '4r',                // LBS: '3r' (3-room or smaller) | '4r' | '5r' (5-room or bigger) — sets the bonus
   // Rental Income — recurring cash inflow from property rental
   rentalIncome: 0,               // monthly rental income ($/mo)
   rentalStartAge: 0,             // 0 = disabled; age to start receiving rental income
@@ -193,6 +202,7 @@ export const DEFAULT_INPUTS = {
   oaEduStartAge: 0,          // age fees start; 0 = first projection year
   oaEduRepayYears: 12,       // student repays into the OA over up to 12 years
   oaToLovedOneYearly: 0, lovedOneRelation: 'parent', lovedOneFromAge: 0, lovedOneYears: 1,
+  lovedOneRecipientRoom: 0, // recipient's top-up limit today (current FRS less SA below 55; ERS less RA from 55); 0 = not checked
   // PR tenure year — 1, 2, or 3+ (3 = full rates). Only shown/relevant when citizenStatus === 'PR'.
   prYear: 3,
   // PR rate type — 'GG' (Graduated Employer + Graduated Employee, default) or
@@ -438,7 +448,10 @@ export const INPUT_LABELS = {
   propMonetiseEnabled: "Prop Monetise",
   propMonetiseScheme: "Prop Scheme", propMonetiseAge: "Prop Monetise Age",
   propMonetiseCashProceeds: "Prop Cash Proceeds", propMonetiseRaTopup: "Prop RA Top-up",
-  lbsMonthlyPayout: "LBS Monthly Payout", lbsPayoutEndAge: "LBS Payout End Age",
+  lbsProceeds: "LBS Net Proceeds (your share)", lbsOwners: "LBS Owners", lbsFlat: "LBS Flat Type",
+  cpfisOaHeld: "CPFIS-OA Held", cpfisSaHeld: "CPFIS-SA Held", cpfisReturn: "CPFIS Expected Return (%)", cpfisSellAge: "CPFIS Sell Age",
+  cpfisFallPct: "CPFIS Stress Fall (%)", cpfisFallAge: "CPFIS Stress Fall Age", matchedPropertyOk: "MRSS/MMSS Property Conditions Met",
+  oaToRaAtPayout: "OA to RA at Payout Start", lovedOneRecipientRoom: "Loved One's Top-up Limit",
   rentalIncome: "Rental Income (Monthly)", rentalStartAge: "Rental Start Age", rentalEndAge: "Rental End Age",
   rentExpense: "Rental Expense (Monthly)", rentExpStartAge: "Rental Exp Start Age", rentExpEndAge: "Rental Exp End Age",
   srsBalance: "SRS Balance", srsAnnualContribution: "SRS Annual Contrib",
@@ -515,6 +528,7 @@ export const BOOL_FIELDS_MOD = [
   'isMale','isSelfEmployed','includeProperty','usePropertyPledge',
   'oaToMaForLovedOne','oaToSaForLovedOne','propMonetiseEnabled','dieWithZeroEnabled',
   'isPwD','propertyLeasehold','showSalaryCalc','hasISP','applyRaOaTransfer',
+  'matchedPropertyOk','oaToRaAtPayout',
 ];
 
 export function buildSafeInputs(raw) {
@@ -544,6 +558,11 @@ export function buildSafeInputs(raw) {
     }
     return base;
   });
+  // Legacy field migration (fix 22): LBS used a cash amount, an RA top-up and a monthly payout that HDB
+  // does not pay. Their total becomes the net proceeds; the RA top-up, cash and bonus now follow HDB's rules.
+  if (raw.propMonetiseScheme === 'lbs' && raw.lbsProceeds === undefined) {
+    safe.lbsProceeds = (Number(raw.propMonetiseCashProceeds) || 0) + (Number(raw.propMonetiseRaTopup) || 0);
+  }
   // Legacy field migration: cpfisAmount → cpfisOaAmount
   if (raw.cpfisAmount !== undefined && !raw.cpfisOaAmount) safe.cpfisOaAmount = raw.cpfisAmount;
   // Legacy field migration: srsCitizenPR (boolean) → citizenStatus string

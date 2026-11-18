@@ -216,6 +216,14 @@ export const describeChange = (key, value, plan) => {
     case 'spendSavings': return value ? 'Use your savings as retirement income' : 'Keep your savings untouched';
     case 'dieWithZero': return value ? 'Spend everything by the end (die with zero)' : 'Keep something back';
     case 'dieWithZeroAge': return `Spend down by age ${value}`;
+    case 'lbsAge': return value > 0 ? `Sell part of your flat's lease to HDB at ${value} (Lease Buyback Scheme)` : 'No Lease Buyback';
+    case 'lbsProceeds': return `Lease Buyback proceeds of ${money(value)} (your share, today's dollars)`;
+    case 'lbsOwners': return value > 1 ? 'Two or more owners' : 'You are the only owner';
+    case 'lbsFlat': return value === '3r' ? '3-room or smaller flat' : value === '5r' ? '5-room or bigger flat' : '4-room flat';
+    case 'cpfisYearly': return value > 0 ? `Invest ${money(value)} a year from your Ordinary Account (CPFIS)` : 'No new CPF investments';
+    case 'cpfisReturn': return `CPF investments return ${value}% a year (not guaranteed)`;
+    case 'cpfisSellAge': return value > 0 ? `Sell your CPF investments at ${value}` : 'Keep your CPF investments';
+    case 'lovedRecipientRoom': return value > 0 ? `Loved one can take up to ${money(value)}` : "Loved one's limit not checked";
     case 'oaKeep': return value > 0 ? `Keep ${money(value)} of Ordinary Account savings untouched` : 'Spend all Ordinary Account savings';
     default: return `${key}: ${value}`;
   }
@@ -289,7 +297,13 @@ export const laterScene = (plan, now = new Date()) => {
 /** What would be left for family at 75 to 95: Ordinary Account savings, plus unused CPF LIFE premium. */
 export const legacyScene = (plan) => {
   const d = drawdown(plan);
-  const left = d.left.map((x) => ({ ...x, total: x.oa + (x.life || 0) }));
+  // CPF investments not yet sold go to the family too (CPF Investment Scheme), in today's dollars.
+  const infl = plan.assumptions.inflation;
+  const invested = (age) => {
+    const r = plan.rows.find((x) => x.age === age - 1);
+    return r && r.cpfisValue ? Math.round(r.cpfisValue / Math.pow(1 + infl, age - plan.age)) : 0;
+  };
+  const left = d.left.map((x) => { const inv = invested(x.age); return { ...x, inv, total: x.oa + (x.life || 0) + inv }; });
   const at85 = left.find((x) => x.age === 85) || left.at(-1) || null;
   return { ...d, left, at85, lifePlan: plan.answers.lifePlan };
 };
@@ -304,7 +318,9 @@ export const KEY_CHAPTER = {
   lovedTransferYearly: 'family', lovedRelation: 'family', lovedFromAge: 'family', lovedYears: 'family',
   vc3aYearly: 'building', oaToMaYearly: 'later', dpsCover: 'family',
   withdrawAt55: 'turning55', pledge: 'turning55',
-  savingsYearly: 'building', savingsGrowth: 'building', spendSavings: 'payout', dieWithZero: 'legacy', dieWithZeroAge: 'legacy',
+  savingsYearly: 'building', savingsGrowth: 'building',
+  lbsAge: 'home', lbsProceeds: 'home', lbsOwners: 'home', lbsFlat: 'home',
+  cpfisYearly: 'building', cpfisReturn: 'building', cpfisSellAge: 'building', lovedRecipientRoom: 'family', spendSavings: 'payout', dieWithZero: 'legacy', dieWithZeroAge: 'legacy',
 };
 const chapterFor = (change) => KEY_CHAPTER[Object.keys(change)[0]] || 'payout';
 

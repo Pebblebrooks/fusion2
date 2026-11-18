@@ -114,7 +114,7 @@
 .st-legacy-age { font: 600 15px var(--font-display); color: var(--muted); }
 .st-legacy-bar { height: 16px; gap: 2px; }
 .st-legacy-bar .seg { display: block; height: 100%; }
-.st-legacy-bar .s1 { background: var(--s1); } .st-legacy-bar .s2 { background: var(--s2); }
+.st-legacy-bar .s1 { background: var(--s1); } .st-legacy-bar .s2 { background: var(--s2); } .st-legacy-bar .s3 { background: var(--s3); }
 .st-key-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); }
 
 /* What if drawer */

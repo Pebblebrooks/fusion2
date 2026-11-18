@@ -72,10 +72,19 @@ test('S: transfers to loved ones only from savings above the retirement sum kept
   assert.equal(lovedOneTransfer({ amount: 100000, age: 40, oa: 20000, sa: 230000, ...sums }).total, 20000); // only OA can go before 55
   // Spouse: only the BRS is kept back
   assert.equal(lovedOneTransfer({ amount: 50000, age: 40, oa: 100000, sa: 50000, relation: 'spouse', ...sums }).total, 150000 - S.BRS);
-  // Parent, with a property that covers the rest of the FRS: BRS kept back
-  assert.equal(lovedOneTransfer({ amount: 50000, age: 40, oa: 100000, sa: 50000, ownsProperty: true, propertyValue: 500000, ...sums }).total, 150000 - S.BRS);
+  // Parent, with property (CPF used plus interest, or a pledge) covering the rest of the FRS: BRS kept back
+  const room = S.FRS - S.BRS;
+  assert.equal(lovedOneTransfer({ amount: 50000, age: 40, oa: 100000, sa: 50000, property: room, ...sums }).total, 150000 - S.BRS);
+  // Item T: property only counts for what it covers (CPF Board example: keep FRS less P+I, never below BRS)
+  assert.equal(lovedOneTransfer({ amount: 50000, age: 40, oa: 140000, sa: 50000, property: 50000, ...sums }).total, 190000 - (S.FRS - 50000));
   // Siblings and in-laws: FRS kept back, property does not help
-  assert.equal(lovedOneTransfer({ amount: 50000, age: 40, oa: 100000, sa: 50000, relation: 'other', ownsProperty: true, propertyValue: 500000, ...sums }).total, 0);
+  assert.equal(lovedOneTransfer({ amount: 50000, age: 40, oa: 100000, sa: 50000, relation: 'other', property: room, ...sums }).total, 0);
+  // From 55, siblings and in-laws: only OA savings can go
+  assert.equal(lovedOneTransfer({ amount: 50000, age: 60, oa: 10000, ra: 300000, relation: 'other', ...sums }).total, 10000);
+  // Below 55, the net amount invested under CPFIS counts towards the FRS
+  assert.equal(lovedOneTransfer({ amount: 10000, age: 40, oa: 150000, sa: 50000, netInvested: 30000, ...sums }).total, 230000 - S.FRS);
+  // Item U: the recipient's top-up limit caps the transfer
+  assert.equal(lovedOneTransfer({ amount: 10000, age: 40, oa: 250000, sa: 30000, recipientRoom: 4000, ...sums }).total, 4000);
   // From 55: OA first, then RA
   const t = lovedOneTransfer({ amount: 30000, age: 60, oa: 10000, ra: 250000, ...sums });
   assert.deepEqual([t.fromOa, t.fromRa, t.total], [10000, 20000, 30000]);

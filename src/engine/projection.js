@@ -6,6 +6,7 @@ import { _cpfEngineInit, balaRatio, makeComputeGF } from './common.js';
 import { ANNUAL_LIMIT, CPF_RATES, MMSS_PILOT_END_YEAR, MMSS_PILOT_START_YEAR, RETIREMENT_SUMS_2026, projectedSum, getDpsPremiumForAge, getPRRates, scAllocBand, scEmployeeRate, silverHousingBonus, SHB, cohortFRS } from '../policy/cpf2026.js';
 import { medicalYear } from './medical.js';
 import { eduWithdrawsAt, eduRepayStartAge, makeEduLoan, eduLoanYear, lovedOneTransfer } from './family.js';
+import { lbsOutcome, LBS, matchedPropertyOk, propertyTowardsFrs, frsSetAside, makeCpfis, cpfisInvest, cpfisGrow, cpfisSell, oaWithdrawal, oaToRaAtPayout } from './schemes.js';
 
 // ── BUG-5 fix: runProjectionWithDWZ ─────────────────────────────────────────
 // Shared Die-with-Zero multi-pass wrapper — extracts the DWZ logic that was
@@ -180,6 +181,10 @@ export function runProjectionEngine(inputs, {
   const lovedOneFromAge = Number(inputs.lovedOneFromAge) || 0;   // 0 = from now
   const lovedOneYears = Math.max(1, Number(inputs.lovedOneYears) || 1);
   const ownsPropertyForTransfer = inputs.includeProperty !== false && (Number(inputs.propertyValue) || 0) > 0;
+  // Recipient's top-up limit (item U): how much more the loved one's account can take now (0 = not checked).
+  // Grows each year with the retirement sums.
+  const lovedOneRecipientRoom = Math.max(0, Number(inputs.lovedOneRecipientRoom) || 0);
+  let lovedOneGiven = 0;
   // Frequency flags — used to zero out recurring fields for 'one-time' application
   const vc3aFreq     = inputs.vc3aFreq     || 'annual';
   const vcSaFreq     = inputs.vcSaFreq     || 'annual';
@@ -321,6 +326,23 @@ export function runProjectionEngine(inputs, {
       : Math.round(projectedSum('BRS', rsGrowth, Math.max(0, (baseYear + yearsTo55) - 2026))))
     : (startAge >= 55 ? past55FRS : projFRS55);
 
+  // The member's own Full and Basic Retirement Sums (not pledge-adjusted), for rules that apply from 55.
+  const cohortFRSval = startAge >= 55 ? past55FRS : projFRS55;
+  const cohortBRSval = Math.round(cohortFRSval / 2);
+  // CPF Investment Scheme (fix 24): holdings grow at the member's own expected return (may be negative),
+  // with an optional one-off fall as a stress test, and are sold at the age the member chooses (0 = kept).
+  const cpfis = makeCpfis({ oaHeld: inputs.cpfisOaHeld, saHeld: inputs.cpfisSaHeld });
+  const cpfisRate = (Number.isFinite(Number(inputs.cpfisReturn)) && inputs.cpfisReturn !== '' && inputs.cpfisReturn !== null && inputs.cpfisReturn !== undefined ? Number(inputs.cpfisReturn) : 4) / 100;
+  const cpfisSellAge = Number(inputs.cpfisSellAge) || 0;
+  const cpfisFall = Math.min(0.9, Math.max(0, (Number(inputs.cpfisFallPct) || 0) / 100));
+  const cpfisFallAge = Number(inputs.cpfisFallAge) || (cpfisSellAge > 0 ? cpfisSellAge - 1 : 0);
+  // Ordinary Account after 55 (fix 25): the unconditional S$5,000 still unused.
+  let free5k = 5000;
+  // CPF Board: for members born in 1958 or later, OA savings move to the RA up to the FRS when payouts start
+  // (owner-approved 18 Nov 2026). `oaToRaAtPayout: false` turns it off for what-if comparisons only.
+  const _byForXfer = (Number(inputs.birthYear) > 0) ? Number(inputs.birthYear) : (baseYear - startAge);
+  const oaToRaAtPayoutOn = inputs.oaToRaAtPayout !== false && _byForXfer >= 1958;
+
   let oa = Number(inputs.oaBalance) || 0;
   let sa = Number(inputs.saBalance) || 0;
   let ma = Number(inputs.maBalance) || 0;
@@ -381,12 +403,17 @@ export function runProjectionEngine(inputs, {
   const propMonetiseCash = Number(inputs.propMonetiseCashProceeds) || 0;
   const propMonetiseRaTopup = Number(inputs.propMonetiseRaTopup) || 0;
   const propMonetiseIsShb = propMonetiseEnabled && inputs.propMonetiseScheme === 'shb';
+  // Lease Buyback Scheme (fix 22): RA top-up and cash bonus worked out from HDB's rules (schemes.js).
+  const propMonetiseIsLbs = propMonetiseEnabled && inputs.propMonetiseScheme === 'lbs';
+  const lbsProceeds = Number(inputs.lbsProceeds) || 0;
+  const lbsOwners = Math.max(1, Number(inputs.lbsOwners) || 1);
+  const lbsFlat = ['3r', '4r', '5r'].includes(inputs.lbsFlat) ? inputs.lbsFlat : '4r';
+  let lbsThisYear = null;
+  // MRSS / MMSS property conditions (fix 23)
+  const matchedOk = matchedPropertyOk(inputs);
   let rstuRejectedYear = 0; // cash top-up CPF would not accept this year (account already at its limit)
   let shbThisYear = null; // { committed, bonus } in the year a Silver Housing Bonus event happens
   let propMonetiseApplied = startAge >= propMonetiseAge && propMonetiseEnabled;
-  // LBS ongoing monthly payout — only active when scheme is 'lbs'
-  const _lbsMonthlyPE = (propMonetiseEnabled && inputs.propMonetiseScheme === 'lbs') ? (Number(inputs.lbsMonthlyPayout) || 0) : 0;
-  const _lbsEndAgePE  = Number(inputs.lbsPayoutEndAge) || 85;
   // Rental income — recurring monthly cash inflow from property rental
   const _rentalMonthlyPE = Number(inputs.rentalIncome) || 0;
   const _rentalStartPE   = Number(inputs.rentalStartAge) || 0;
@@ -529,6 +556,28 @@ export function runProjectionEngine(inputs, {
     // CPF Board rule: contributions received in month M earn from month M+1.
     // Averaging opening + closing gives each inflow ~6 months, each outflow ~6
     // months of interest — the closest annual-model approximation to CPF actual.
+    // Lease Buyback Scheme (fix 22): applied on the birthday, before the opening balances, so a top-up
+    // in the year payouts start is part of the CPF LIFE premium.
+    lbsThisYear = null;
+    if (propMonetiseIsLbs && age === propMonetiseAge && !propMonetiseApplied) {
+      const yrsL = Math.max(0, (baseYear + (age - startAge)) - 2026);
+      const lbs = (!isForeigner && age >= LBS.minAge)
+        ? lbsOutcome({ age, proceeds: lbsProceeds, ra, owners: lbsOwners, flat: lbsFlat,
+            frs: Math.round(projectedSum('FRS', rsGrowth, yrsL)), brs: Math.round(projectedSum('BRS', rsGrowth, yrsL)) })
+        : { topUp: 0, cash: 0, bonus: 0, requirement: 0 };
+      privateAssets += lbs.cash + lbs.bonus;
+      if (lbs.topUp > 0) { ra += lbs.topUp; cumRaCashTopUps += lbs.topUp; yearInflow += lbs.topUp; totalInjected += lbs.topUp; yearVoluntary += lbs.topUp; }
+      currentPropValue = Math.max(0, currentPropValue - lbsProceeds);
+      lbsThisYear = { topUp: lbs.topUp, cash: lbs.cash, bonus: lbs.bonus, requirement: lbs.requirement };
+      propMonetiseApplied = true;
+    }
+    // At payout start (fix 25): non-withdrawable OA savings move to the RA up to the
+    // member's retirement sum, before the payout birthday balance is taken.
+    let yearOaToRa = 0;
+    if (oaToRaAtPayoutOn && age === _pePayoutAge && age >= 55 && !isForeigner) {
+      yearOaToRa = oaToRaAtPayout({ oa, need: cohortRetSum - ra, free5k });
+      oa -= yearOaToRa; ra += yearOaToRa;
+    }
     const oaOpen = oa, saOpen = sa, maOpen = ma, raOpen = ra;
 
     // Phase 2: Private Assets Growth + DWZ Drawdown
@@ -612,7 +661,10 @@ export function runProjectionEngine(inputs, {
       // so cumulativeOutflow is correct. Previously OA simply shrank silently with no ledger trace.
       if (oaWithdrawalFreq === 'annual') {
         if (age >= 55 && (oaWithdrawalDur === 0 || yearIdx < oaWithdrawalDur)) {
-          const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor));
+          // Fix 25: non-withdrawable OA savings move to the RA first (schemes.js oaWithdrawal).
+          const w = oaWithdrawal({ want: oaWithdrawalAt55, oa, need: cohortRetSum - ra, free5k, floor: oaDrawdownFloor });
+          oa -= w.toRa; ra += w.toRa; yearOaToRa += w.toRa; free5k = w.free5kLeft;
+          const actualW55 = w.out;
           oa            -= actualW55;
           yearOaDrawOut += actualW55;
           totalOutSpent += actualW55;
@@ -628,6 +680,7 @@ export function runProjectionEngine(inputs, {
           oa            -= actualW55;
           yearOaDrawOut += actualW55;
           totalOutSpent += actualW55;
+          if (ra < cohortRetSum) free5k = Math.max(0, free5k - actualW55);
           withdrawalApplied = true;
         }
       }
@@ -665,9 +718,14 @@ export function runProjectionEngine(inputs, {
     // The loved one's account is not tracked here; for the member it is money out.
     const giveToLovedOne = (amount) => {
       const yrsNow = Math.max(0, (baseYear + (age - startAge)) - 2026);
-      const t = lovedOneTransfer({ amount, age, oa, sa, ra, relation: lovedOneRelation, ownsProperty: ownsPropertyForTransfer,
-        propertyValue: currentPropValue, brs: Math.round(projectedSum('BRS', rsGrowth, yrsNow)), frs: Math.round(projectedSum('FRS', rsGrowth, yrsNow)) });
-      oa -= t.fromOa; ra -= t.fromRa;
+      const frsT = age < 55 ? Math.round(projectedSum('FRS', rsGrowth, yrsNow)) : cohortFRSval;
+      const brsT = age < 55 ? Math.round(projectedSum('BRS', rsGrowth, yrsNow)) : cohortBRSval;
+      const property = propertyTowardsFrs({ owns: ownsPropertyForTransfer, pledged: usePropertyPledge && age >= 55, cpfUsedWithInterest: cumHousingFV,
+        leaseLeft: isLeasehold ? leaseRemaining : Infinity, age, frs: frsT, brs: brsT });
+      const room = lovedOneRecipientRoom > 0 ? lovedOneRecipientRoom * Math.pow(1 + rsGrowth, age - startAge) - lovedOneGiven : Infinity;
+      const t = lovedOneTransfer({ amount, age, oa, sa, ra, relation: lovedOneRelation, property, netInvested: cpfis.netOa + cpfis.netSa,
+        brs: brsT, frs: frsT, recipientRoom: room });
+      oa -= t.fromOa; ra -= t.fromRa; lovedOneGiven += t.total;
       yearLovedOneOut += t.total; totalOutSpent += t.total;
     };
 
@@ -703,7 +761,11 @@ export function runProjectionEngine(inputs, {
 
     // OA→MA transfer: CPF policy requires age 55+, FRS or BRS+property already set aside.
     // For self: internal move OA→MA (both accounts change). For loved one: OA outflow only.
-    if (age >= 55 && annualOaToMa > 0 && effOaToMaFreq > 0 && !isForeigner) { // B1: foreigners have no CPF
+    // Fix 24b: only once the member's FRS is set aside (cash, or BRS in cash plus property).
+    const oaToMaPropertyPE = propertyTowardsFrs({ owns: ownsPropertyForTransfer, pledged: usePropertyPledge, cpfUsedWithInterest: cumHousingFV,
+      leaseLeft: isLeasehold ? leaseRemaining : Infinity, age, frs: cohortFRSval, brs: cohortBRSval });
+    if (age >= 55 && annualOaToMa > 0 && effOaToMaFreq > 0 && !isForeigner // B1: foreigners have no CPF
+      && frsSetAside({ cash: ra, property: oaToMaPropertyPE, frs: cohortFRSval, brs: cohortBRSval })) {
       const projBHS_tr = Math.round(projectedSum('BHS', rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
       const maRoom_tr = oaToMaForLovedOne ? annualOaToMa : Math.max(0, projBHS_tr - ma);
       const actualOaToMa = Math.min(annualOaToMa, oa, maRoom_tr);
@@ -760,7 +822,7 @@ export function runProjectionEngine(inputs, {
     const mmssMonthlyIncome   = isSEP
       ? (leContribPaused ? 0 : (Number(inputs.netTradeIncome) || 0) / 12) // E1 fix: zero income during retrenchment/career_break for SEP — prevents ≤$4k gate misfiring and incorrect MRSS credits at line ~1252
       : Math.round((owAnnualScaled_mmss + bonusMmss) / 12); // OW + AW/12; 0 post-retirement
-    if (isSC && age >= 55 && age <= 70 &&
+    if (isSC && matchedOk && age >= 55 && age <= 70 &&
         simYear_mmss >= MMSS_PILOT_START_YEAR && simYear_mmss <= MMSS_PILOT_END_YEAR &&
         mmssMonthlyIncome <= 4000) {
       const projBHS_mm = Math.round(projectedSum('BHS', rsGrowth, Math.max(0, Math.min(simYear_mmss, bhsLockedYear) - 2026)));
@@ -783,6 +845,7 @@ export function runProjectionEngine(inputs, {
       const cpfisOaInvestible = Math.max(0, oa - 20000);
       const actualCpfisOa = Math.min(cpfisOaAmount * effCpfisOaFreq, cpfisOaInvestible);
       oa -= actualCpfisOa;
+      cpfisInvest(cpfis, { fromOa: actualCpfisOa });
       yearCpfisOut += actualCpfisOa;
       totalOutSpent += actualCpfisOa;
     }
@@ -792,8 +855,19 @@ export function runProjectionEngine(inputs, {
       const cpfisSaInvestible = Math.max(0, sa - 40000);
       const actualCpfisSa = Math.min(cpfisSaAmount * effCpfisSaFreq, cpfisSaInvestible);
       sa -= actualCpfisSa;
+      cpfisInvest(cpfis, { fromSa: actualCpfisSa });
       yearCpfisOut += actualCpfisSa;
       totalOutSpent += actualCpfisSa;
+    }
+    // CPFIS holdings (fix 24): a year's return (and any stress-test fall), then the sale if chosen.
+    let yearCpfisIn = 0;
+    if (cpfis.oa + cpfis.sa > 0 && !isForeigner) {
+      cpfisGrow(cpfis, { rate: cpfisRate, fall: cpfisFall > 0 && age === cpfisFallAge ? cpfisFall : 0 });
+      if (cpfisSellAge > 0 && age >= cpfisSellAge) {
+        const sold = cpfisSell(cpfis, { age, ra, frs: cohortFRSval });
+        oa += sold.toOa; sa += sold.toSa; ra += sold.toRa;
+        yearCpfisIn = sold.total; yearInflow += sold.total; totalInjected += sold.total;
+      }
     }
 
     // Rev #D2: leContribPaused (retrenchment/career_break) zeros gf like a career break.
@@ -900,7 +974,7 @@ export function runProjectionEngine(inputs, {
         // C4 fix: same overrideVcSA ternary as employed path — MRSS in SEP branch must
         // also respect the What-If slider rather than reading live inputs.vcSaTopup directly.
         const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
-        const mrssEligible_sep = isSC && mrssAgeOk_sep && mrssBalOk_sep && mrssIncomeOk_sep && cumMrssReceived < 20000 && vcSaThis_sep > 0;
+        const mrssEligible_sep = isSC && matchedOk && mrssAgeOk_sep && mrssBalOk_sep && mrssIncomeOk_sep && cumMrssReceived < 20000 && vcSaThis_sep > 0;
         const actualMrss_sep = mrssEligible_sep ? Math.min(vcSaThis_sep, 2000, 20000 - cumMrssReceived) : 0;
         if (actualMrss_sep > 0) cumMrssReceived += actualMrss_sep;
         const govGrant_sep = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
@@ -1075,7 +1149,7 @@ export function runProjectionEngine(inputs, {
         // C4 fix: mirror the same overrideVcSA ternary used by cappedVcSA (line ~1355) so that
         // MRSS eligibility and grant size are computed against the What-If slider value, not live inputs.
         const vcSaThis_emp = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
-        const mrssEligible_emp = isSC && mrssAgeOk_emp && mrssBalOk_emp && mrssIncomeOk_emp && cumMrssReceived < 20000 && vcSaThis_emp > 0;
+        const mrssEligible_emp = isSC && matchedOk && mrssAgeOk_emp && mrssBalOk_emp && mrssIncomeOk_emp && cumMrssReceived < 20000 && vcSaThis_emp > 0;
         const actualMrss_emp = mrssEligible_emp ? Math.min(vcSaThis_emp, 2000, 20000 - cumMrssReceived) : 0;
         if (actualMrss_emp > 0) cumMrssReceived += actualMrss_emp;
         yearGovGrants += (Number(inputs.annualGovGrant)||0) * effGovGrantFreq + actualMrss_emp + wisCpf * effWisFreq;
@@ -1163,7 +1237,7 @@ export function runProjectionEngine(inputs, {
           const projBRS_rstu = Math.round(projectedSum('BRS', rsGrowth, yrOffset));
           // BUG-3 fix: PwD is a bypass for the under-55 requirement only — must include age < 55.
           const mrssAgeOk = age >= 55 || (isPwD && age < 55);
-          const mrssEligible = !(isSEP && age < contribStop) /* working self-employed: matched in their own branch */ && isSC && mrssAgeOk && ra < projBRS_rstu && mmssMonthlyIncome <= 4000 && cumMrssReceived < 20000 && actualVcSa > 0;
+          const mrssEligible = !(isSEP && age < contribStop) /* working self-employed: matched in their own branch */ && isSC && matchedOk && mrssAgeOk && ra < projBRS_rstu && mmssMonthlyIncome <= 4000 && cumMrssReceived < 20000 && actualVcSa > 0;
           ra += actualVcSa;
           cumRaCashTopUps += actualVcSa;
           if (mrssEligible) {
@@ -1349,7 +1423,13 @@ export function runProjectionEngine(inputs, {
 
     // OA Drawdown — post-payout supplementary income drawn from OA
     if (oaDrawdownActive && age >= oaDrawdownStartAge) {
-      const availableToDraw = Math.max(0, oa - oaDrawdownFloor);
+      let availableToDraw = Math.max(0, oa - oaDrawdownFloor);
+      if (age >= 55 && !isForeigner) {
+        // Fix 25: non-withdrawable OA savings move to the RA first (schemes.js oaWithdrawal).
+        const w = oaWithdrawal({ want: oaDrawdownAnnual, oa, need: cohortRetSum - ra, free5k, floor: oaDrawdownFloor });
+        oa -= w.toRa; ra += w.toRa; yearOaToRa += w.toRa; free5k = w.free5kLeft;
+        availableToDraw = w.out;
+      }
       const actualDraw = Math.min(oaDrawdownAnnual, availableToDraw);
       oa = Math.max(oaDrawdownFloor, oa - actualDraw);
       yearOaDrawOut = actualDraw;
@@ -1397,13 +1477,14 @@ export function runProjectionEngine(inputs, {
       // $60,000 a household and to the room below the prevailing Full Retirement Sum (HDB).
       let raTopupNow = isForeigner ? 0 : propMonetiseRaTopup; // B1: foreigners have no RA
       let bonusNow = 0;
+      const cashNow = propMonetiseCash;
       if (propMonetiseIsShb && !isForeigner) {
         const frsNow = Math.round(projectedSum('FRS', rsGrowth, Math.max(0, (baseYear + (age - startAge)) - 2026)));
         raTopupNow = Math.min(propMonetiseRaTopup, SHB.maxCommit, Math.max(0, frsNow - ra));
         bonusNow = silverHousingBonus({ committed: raTopupNow, nextFlat: inputs.shsToFlat === '2r' ? '2r' : '3r' });
       }
       // Cash proceeds (and any Silver Housing Bonus, which is paid in cash) → private assets
-      privateAssets += propMonetiseCash + bonusNow;
+      privateAssets += cashNow + bonusNow;
       if (raTopupNow > 0) {
         ra += raTopupNow;
         cumRaCashTopUps += raTopupNow;
@@ -1415,11 +1496,6 @@ export function runProjectionEngine(inputs, {
       // Property value reduced to reflect downgrade / LBS (approximate: remove proceeds from property value)
       currentPropValue = Math.max(0, currentPropValue - propMonetiseCash - raTopupNow);
       propMonetiseApplied = true;
-    }
-    // LBS ongoing monthly payout — HDB pays from propMonetiseAge until lbsPayoutEndAge
-    if (_lbsMonthlyPE > 0 && age >= propMonetiseAge && age <= _lbsEndAgePE) {
-      const lbsAnnual = _lbsMonthlyPE * 12;
-      privateAssets += lbsAnnual; yearInflow += lbsAnnual; totalInjected += lbsAnnual;
     }
     // Rental income — recurring cash inflow from property rental
     if (_rentalMonthlyPE > 0 && _rentalStartPE > 0 && age >= _rentalStartPE && age <= _rentalEndPE) {
@@ -1568,6 +1644,9 @@ export function runProjectionEngine(inputs, {
       ma: Math.round(ma), ra: Math.round(ra),
       ...(rstuRejectedYear > 0 ? { topUpNotAccepted: Math.round(rstuRejectedYear) } : {}),
       ...(shbThisYear ? { shbCommitted: shbThisYear.committed, shbBonus: shbThisYear.bonus } : {}),
+      ...(lbsThisYear ? { lbsTopUp: lbsThisYear.topUp, lbsCash: lbsThisYear.cash, lbsBonus: lbsThisYear.bonus, lbsRequirement: lbsThisYear.requirement } : {}),
+      ...(cpfis.oa + cpfis.sa > 0 || yearCpfisIn > 0 ? { cpfisValue: Math.round(cpfis.oa + cpfis.sa), yearCpfisIn: Math.round(yearCpfisIn) } : {}),
+      ...(yearOaToRa > 0 ? { yearOaToRa: Math.round(yearOaToRa) } : {}),
       raStart: Math.round(raOpen), // RA on the birthday that starts this age year (see raAtPayoutStart)
       total: Math.round(oa + sa + ma + ra),
       propertyValue: Math.round(currentPropValue),

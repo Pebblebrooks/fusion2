@@ -6,6 +6,7 @@ import { _cpfEngineInit, balaRatio, makeComputeGF } from './common.js';
 import { ANNUAL_LIMIT, CPF_RATES, MMSS_PILOT_END_YEAR, MMSS_PILOT_START_YEAR, RETIREMENT_SUMS_2026, projectedSum, getDpsPremiumForAge, getPRRates, scAllocBand, scEmployeeRate } from '../policy/cpf2026.js';
 import { medicalYear } from './medical.js';
 import { eduWithdrawsAt, eduRepayStartAge, makeEduLoan, eduLoanYear, lovedOneTransfer } from './family.js';
+import { lbsOutcome, LBS, matchedPropertyOk, propertyTowardsFrs, frsSetAside, makeCpfis, cpfisInvest, cpfisGrow, cpfisSell, oaWithdrawal } from './schemes.js';
 import { computeBasicPlanParams, computeBasicPlanYearPayout, interpolateCpfLife } from './cpfLife.js';
 
 export function runRSSEngine(inputs, {
@@ -91,6 +92,9 @@ export function runRSSEngine(inputs, {
   const lovedOneFromAge = Number(inputs.lovedOneFromAge) || 0;
   const lovedOneYears = Math.max(1, Number(inputs.lovedOneYears) || 1);
   const ownsPropertyForTransfer = inputs.includeProperty !== false && (Number(inputs.propertyValue) || 0) > 0;
+  const lovedOneRecipientRoom = Math.max(0, Number(inputs.lovedOneRecipientRoom) || 0);
+  let lovedOneGiven = 0;
+  const matchedOk = matchedPropertyOk(inputs);
   const oaEduStartAge   = Number(inputs.oaEduStartAge) || 0;
   const oaEduRepayYears = Number(inputs.oaEduRepayYears) || 12;
   const vc3aFreq      = inputs.vc3aFreq     || 'annual';
@@ -207,6 +211,19 @@ export function runRSSEngine(inputs, {
     ? (startAge >= 55 ? Math.round(RETIREMENT_SUMS_2026.BRS / Math.pow(1 + rsGrowth, Math.max(0, startAge - 55)))
       : Math.round(projectedSum('BRS', rsGrowth, Math.max(0, (baseYear + yearsTo55) - 2026))))
     : (startAge >= 55 ? past55FRS : projFRS55);
+  // Same scheme rules as projection.js (schemes.js): own sums, CPFIS holdings, OA after 55.
+  const cohortFRSval = startAge >= 55 ? past55FRS : projFRS55;
+  const cohortBRSval = Math.round(cohortFRSval / 2);
+  const cpfis = makeCpfis({ oaHeld: inputs.cpfisOaHeld, saHeld: inputs.cpfisSaHeld });
+  const cpfisRate = (inputs.cpfisReturn === undefined || inputs.cpfisReturn === null || inputs.cpfisReturn === '' || !Number.isFinite(Number(inputs.cpfisReturn)) ? 4 : Number(inputs.cpfisReturn)) / 100;
+  const cpfisSellAge = Number(inputs.cpfisSellAge) || 0;
+  const cpfisFall = Math.min(0.9, Math.max(0, (Number(inputs.cpfisFallPct) || 0) / 100));
+  const cpfisFallAge = Number(inputs.cpfisFallAge) || (cpfisSellAge > 0 ? cpfisSellAge - 1 : 0);
+  let free5k = 5000;
+  const propMonetiseIsLbs = inputs.propMonetiseEnabled === true && inputs.propMonetiseScheme === 'lbs';
+  const lbsProceeds = Number(inputs.lbsProceeds) || 0;
+  const lbsOwners = Math.max(1, Number(inputs.lbsOwners) || 1);
+  const lbsFlat = ['3r', '4r', '5r'].includes(inputs.lbsFlat) ? inputs.lbsFlat : '4r';
   let oa = Number(inputs.oaBalance) || 0;
   let sa = Number(inputs.saBalance) || 0;
   let ma = Number(inputs.maBalance) || 0;
@@ -239,9 +256,6 @@ export function runRSSEngine(inputs, {
   const propMonetiseCash    = Number(inputs.propMonetiseCashProceeds) || 0;
   const propMonetiseRaTopup = Number(inputs.propMonetiseRaTopup)      || 0;
   let propMonetiseApplied   = startAge >= propMonetiseAge && propMonetiseEnabled;
-  // LBS monthly income stream — only active when scheme = 'lbs'
-  const _lbsMonthlyRSS = (propMonetiseEnabled && inputs.propMonetiseScheme === 'lbs') ? (Number(inputs.lbsMonthlyPayout) || 0) : 0;
-  const _lbsEndAgeRSS  = Number(inputs.lbsPayoutEndAge) || 85;
   // Rental income — recurring cash inflow to private assets, independent of prop monetise
   const _rentalMonthlyRSS = Number(inputs.rentalIncome) || 0;
   const _rentalStartRSS   = Number(inputs.rentalStartAge) || 0;
@@ -340,6 +354,7 @@ export function runRSSEngine(inputs, {
     }
 
     // Opening balances for mid-year interest
+    let yearOaToRa = 0; // OA moved to the RA on a withdrawal from 55 (schemes.js oaWithdrawal)
     const oaOpen = oa, saOpen = sa, maOpen = ma, raOpen = ra;
 
     // Private assets
@@ -399,9 +414,9 @@ export function runRSSEngine(inputs, {
     // OA withdrawal at 55
     if (oaWithdrawalAt55 > 0) {
       if (oaWithdrawalFreq === 'annual') {
-        if (age >= 55 && (oaWithdrawalDur === 0 || yearIdx < oaWithdrawalDur)) { const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor)); oa -= actualW55; yearOaDrawOut += actualW55; totalOutSpent += actualW55; }
+        if (age >= 55 && (oaWithdrawalDur === 0 || yearIdx < oaWithdrawalDur)) { const w = oaWithdrawal({ want: oaWithdrawalAt55, oa, need: cohortRetSum - ra, free5k, floor: oaDrawdownFloor }); oa -= w.toRa; ra += w.toRa; yearOaToRa += w.toRa; free5k = w.free5kLeft; const actualW55 = w.out; oa -= actualW55; yearOaDrawOut += actualW55; totalOutSpent += actualW55; }
       } else {
-        if (age === 55 && !withdrawalApplied) { const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor)); oa -= actualW55; yearOaDrawOut += actualW55; totalOutSpent += actualW55; withdrawalApplied = true; }
+        if (age === 55 && !withdrawalApplied) { const actualW55 = Math.min(oaWithdrawalAt55, Math.max(0, oa - oaDrawdownFloor)); oa -= actualW55; yearOaDrawOut += actualW55; totalOutSpent += actualW55; if (ra < cohortRetSum) free5k = Math.max(0, free5k - actualW55); withdrawalApplied = true; }
       }
     }
 
@@ -415,9 +430,14 @@ export function runRSSEngine(inputs, {
     // OA→SA/RA transfers. To a loved one: a retirement sum is kept back first (family.js).
     const giveToLovedOne = (amount) => {
       const yrsNow = Math.max(0, (baseYear + (age - startAge)) - 2026);
-      const t = lovedOneTransfer({ amount, age, oa, sa, ra, relation: lovedOneRelation, ownsProperty: ownsPropertyForTransfer,
-        propertyValue: currentPropValue, brs: Math.round(projectedSum('BRS', rsGrowth, yrsNow)), frs: Math.round(projectedSum('FRS', rsGrowth, yrsNow)) });
-      oa -= t.fromOa; ra -= t.fromRa; yearLovedOneOut += t.total; totalOutSpent += t.total;
+      const frsT = age < 55 ? Math.round(projectedSum('FRS', rsGrowth, yrsNow)) : cohortFRSval;
+      const brsT = age < 55 ? Math.round(projectedSum('BRS', rsGrowth, yrsNow)) : cohortBRSval;
+      const property = propertyTowardsFrs({ owns: ownsPropertyForTransfer, pledged: usePropertyPledge && age >= 55, cpfUsedWithInterest: cumHousingFV,
+        leaseLeft: isLeasehold ? leaseRemaining : Infinity, age, frs: frsT, brs: brsT });
+      const room = lovedOneRecipientRoom > 0 ? lovedOneRecipientRoom * Math.pow(1 + rsGrowth, age - startAge) - lovedOneGiven : Infinity;
+      const t = lovedOneTransfer({ amount, age, oa, sa, ra, relation: lovedOneRelation, property, netInvested: cpfis.netOa + cpfis.netSa,
+        brs: brsT, frs: frsT, recipientRoom: room });
+      oa -= t.fromOa; ra -= t.fromRa; lovedOneGiven += t.total; yearLovedOneOut += t.total; totalOutSpent += t.total;
     };
     if (age < 55 && annualOaToSa > 0 && effOaToSaFreq > 0 && !isForeigner) {
       if (oaToSaForLovedOne) giveToLovedOne(annualOaToSa);
@@ -433,7 +453,10 @@ export function runRSSEngine(inputs, {
     }
 
     // OA→MA transfer
-    if (age >= 55 && annualOaToMa > 0 && effOaToMaFreq > 0 && !isForeigner) {
+    const oaToMaPropertyR = propertyTowardsFrs({ owns: ownsPropertyForTransfer, pledged: usePropertyPledge, cpfUsedWithInterest: cumHousingFV,
+      leaseLeft: isLeasehold ? leaseRemaining : Infinity, age, frs: cohortFRSval, brs: cohortBRSval });
+    if (age >= 55 && annualOaToMa > 0 && effOaToMaFreq > 0 && !isForeigner
+      && frsSetAside({ cash: ra, property: oaToMaPropertyR, frs: cohortFRSval, brs: cohortBRSval })) {
       const projBHS_tr = Math.round(projectedSum('BHS', rsGrowth, Math.max(0, Math.min(baseYear + (age - startAge), bhsLockedYear) - 2026)));
       const actualOaToMa = Math.min(annualOaToMa, oa, oaToMaForLovedOne ? annualOaToMa : Math.max(0, projBHS_tr - ma));
       oa -= actualOaToMa;
@@ -456,7 +479,7 @@ export function runRSSEngine(inputs, {
     const awCeilingMmss = Math.max(0, 102000 - owAnnualScaled_mmss);
     const bonusMmss     = Math.min((Number(inputs.salaryBonus) || 0) * gf_mmss, awCeilingMmss);
     const mmssMonthlyIncome = isSEP ? (leContribPaused ? 0 : (Number(inputs.netTradeIncome) || 0) / 12) : Math.round((owAnnualScaled_mmss + bonusMmss) / 12);
-    if (isSC && age >= 55 && age <= 70 && simYear_mmss >= MMSS_PILOT_START_YEAR && simYear_mmss <= MMSS_PILOT_END_YEAR && mmssMonthlyIncome <= 4000) {
+    if (isSC && matchedOk && age >= 55 && age <= 70 && simYear_mmss >= MMSS_PILOT_START_YEAR && simYear_mmss <= MMSS_PILOT_END_YEAR && mmssMonthlyIncome <= 4000) {
       const projBHS_mm = Math.round(projectedSum('BHS', rsGrowth, Math.max(0, Math.min(simYear_mmss, bhsLockedYear) - 2026)));
       if (maBeforeVcMa < projBHS_mm / 2) {
         const vcMaThis = vcMaCash * effVcMaFreq;
@@ -467,11 +490,20 @@ export function runRSSEngine(inputs, {
     // CPFIS
     if (cpfisOaAmount * effCpfisOaFreq > 0 && age >= 18 && !isForeigner) {
       const actualCpfisOa = Math.min(cpfisOaAmount * effCpfisOaFreq, Math.max(0, oa - 20000));
-      oa -= actualCpfisOa; yearCpfisOut += actualCpfisOa; totalOutSpent += actualCpfisOa;
+      oa -= actualCpfisOa; cpfisInvest(cpfis, { fromOa: actualCpfisOa }); yearCpfisOut += actualCpfisOa; totalOutSpent += actualCpfisOa;
     }
     if (cpfisSaAmount * effCpfisSaFreq > 0 && age < 55 && age >= 18 && !isForeigner) {
       const actualCpfisSa = Math.min(cpfisSaAmount * effCpfisSaFreq, Math.max(0, sa - 40000));
-      sa -= actualCpfisSa; yearCpfisOut += actualCpfisSa; totalOutSpent += actualCpfisSa;
+      sa -= actualCpfisSa; cpfisInvest(cpfis, { fromSa: actualCpfisSa }); yearCpfisOut += actualCpfisSa; totalOutSpent += actualCpfisSa;
+    }
+    let yearCpfisIn = 0;
+    if (cpfis.oa + cpfis.sa > 0 && !isForeigner) {
+      cpfisGrow(cpfis, { rate: cpfisRate, fall: cpfisFall > 0 && age === cpfisFallAge ? cpfisFall : 0 });
+      if (cpfisSellAge > 0 && age >= cpfisSellAge) {
+        const sold = cpfisSell(cpfis, { age, ra, frs: cohortFRSval });
+        oa += sold.toOa; sa += sold.toSa; ra += sold.toRa;
+        yearCpfisIn = sold.total; yearInflow += sold.total; totalInjected += sold.total;
+      }
     }
 
     // Contribution block
@@ -544,7 +576,7 @@ export function runRSSEngine(inputs, {
         const mrssBalOk_sep = age >= 55 ? ra < projBRS_sep : (oa + sa) < projBRS_sep;
         const mrssIncomeOk_sep = mmssMonthlyIncome <= 4000;
         const vcSaThis_sep = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
-        const mrssEligible_sep = isSC && mrssAgeOk_sep && mrssBalOk_sep && mrssIncomeOk_sep && cumMrssReceived < 20000 && vcSaThis_sep > 0;
+        const mrssEligible_sep = isSC && matchedOk && mrssAgeOk_sep && mrssBalOk_sep && mrssIncomeOk_sep && cumMrssReceived < 20000 && vcSaThis_sep > 0;
         const actualMrss_sep = mrssEligible_sep ? Math.min(vcSaThis_sep, 2000, 20000 - cumMrssReceived) : 0;
         if (actualMrss_sep > 0) cumMrssReceived += actualMrss_sep;
         const govGrant_sep = (Number(inputs.annualGovGrant) || 0) * effGovGrantFreq;
@@ -651,7 +683,7 @@ export function runRSSEngine(inputs, {
         const bonusMrss = Math.min((Number(inputs.salaryBonus) || 0) * gf, Math.max(0, 102000 - owAnnualScaled_mrss));
         const mrssIncomeOk_emp = Math.round((owAnnualScaled_mrss + bonusMrss) / 12) <= 4000;
         const vcSaThis_emp = (overrideVcSA !== undefined ? overrideVcSA : (Number(inputs.vcSaTopup) || 0)) * effVcSaFreq;
-        const mrssEligible_emp = isSC && mrssAgeOk_emp && mrssBalOk_emp && mrssIncomeOk_emp && cumMrssReceived < 20000 && vcSaThis_emp > 0;
+        const mrssEligible_emp = isSC && matchedOk && mrssAgeOk_emp && mrssBalOk_emp && mrssIncomeOk_emp && cumMrssReceived < 20000 && vcSaThis_emp > 0;
         const actualMrss_emp = mrssEligible_emp ? Math.min(vcSaThis_emp, 2000, 20000 - cumMrssReceived) : 0;
         if (actualMrss_emp > 0) cumMrssReceived += actualMrss_emp;
         yearGovGrants += (Number(inputs.annualGovGrant)||0) * effGovGrantFreq + actualMrss_emp + wisCpf * effWisFreq;
@@ -715,7 +747,7 @@ export function runRSSEngine(inputs, {
           const projBRS_rstu = Math.round(projectedSum('BRS', rsGrowth, yrOffset));
           // BUG-3 fix: PwD is a bypass for the under-55 requirement only — must include age < 55.
           const mrssAgeOk = age >= 55 || (isPwD && age < 55);
-          const mrssEligible = isSC && mrssAgeOk && ra < projBRS_rstu && mmssMonthlyIncome <= 4000 && cumMrssReceived < 20000 && actualVcSa > 0;
+          const mrssEligible = isSC && matchedOk && mrssAgeOk && ra < projBRS_rstu && mmssMonthlyIncome <= 4000 && cumMrssReceived < 20000 && actualVcSa > 0;
           ra += actualVcSa;
           cumRaCashTopUps += actualVcSa;
           if (mrssEligible) {
@@ -842,7 +874,12 @@ export function runRSSEngine(inputs, {
 
     // OA drawdown
     if (oaDrawdownActive && age >= oaDrawdownStartAge) {
-      const actualDraw = Math.min(oaDrawdownAnnual, Math.max(0, oa - oaDrawdownFloor));
+      let canDraw = Math.max(0, oa - oaDrawdownFloor);
+      if (age >= 55 && !isForeigner) {
+        const w = oaWithdrawal({ want: oaDrawdownAnnual, oa, need: cohortRetSum - ra, free5k, floor: oaDrawdownFloor });
+        oa -= w.toRa; ra += w.toRa; yearOaToRa += w.toRa; free5k = w.free5kLeft; canDraw = w.out;
+      }
+      const actualDraw = Math.min(oaDrawdownAnnual, canDraw);
       oa = Math.max(oaDrawdownFloor, oa - actualDraw); yearOaDrawOut = actualDraw; totalOutSpent += actualDraw;
     }
 
@@ -865,16 +902,22 @@ export function runRSSEngine(inputs, {
     }
 
     // Property monetisation
+    let lbsThisYear = null;
     if (propMonetiseEnabled && age === propMonetiseAge && !propMonetiseApplied) {
-      privateAssets += propMonetiseCash;
-      if (propMonetiseRaTopup > 0 && !isForeigner) { ra += propMonetiseRaTopup; cumRaCashTopUps += propMonetiseRaTopup; yearInflow += propMonetiseRaTopup; totalInjected += propMonetiseRaTopup; yearVoluntary += propMonetiseRaTopup; }
-      currentPropValue = Math.max(0, currentPropValue - propMonetiseCash - propMonetiseRaTopup);
+      let cashNow = propMonetiseCash, raNow = propMonetiseRaTopup, bonusNow = 0;
+      if (propMonetiseIsLbs) {
+        const yrsL = Math.max(0, (baseYear + (age - startAge)) - 2026);
+        const lbs = (!isForeigner && age >= LBS.minAge)
+          ? lbsOutcome({ age, proceeds: lbsProceeds, ra, owners: lbsOwners, flat: lbsFlat,
+              frs: Math.round(projectedSum('FRS', rsGrowth, yrsL)), brs: Math.round(projectedSum('BRS', rsGrowth, yrsL)) })
+          : { topUp: 0, cash: 0, bonus: 0, requirement: 0 };
+        cashNow = lbs.cash; raNow = lbs.topUp; bonusNow = lbs.bonus;
+        lbsThisYear = { topUp: lbs.topUp, cash: lbs.cash, bonus: lbs.bonus, requirement: lbs.requirement };
+      }
+      privateAssets += cashNow + bonusNow;
+      if (raNow > 0 && !isForeigner) { ra += raNow; cumRaCashTopUps += raNow; yearInflow += raNow; totalInjected += raNow; yearVoluntary += raNow; }
+      currentPropValue = Math.max(0, currentPropValue - (propMonetiseIsLbs ? lbsProceeds : propMonetiseCash + propMonetiseRaTopup));
       propMonetiseApplied = true;
-    }
-    // LBS ongoing monthly payout — HDB pays from propMonetiseAge until lbsPayoutEndAge
-    if (_lbsMonthlyRSS > 0 && age >= propMonetiseAge && age <= _lbsEndAgeRSS) {
-      const lbsAnnual = _lbsMonthlyRSS * 12;
-      privateAssets += lbsAnnual; yearInflow += lbsAnnual; totalInjected += lbsAnnual;
     }
     // Rental income — recurring cash inflow from property rental
     if (_rentalMonthlyRSS > 0 && _rentalStartRSS > 0 && age >= _rentalStartRSS && age <= _rentalEndRSS) {
@@ -1107,6 +1150,9 @@ export function runRSSEngine(inputs, {
       age,
       oa: Math.round(oa), sa: Math.round(sa),
       ma: Math.round(ma), ra: Math.round(ra),
+      ...(lbsThisYear ? { lbsTopUp: lbsThisYear.topUp, lbsCash: lbsThisYear.cash, lbsBonus: lbsThisYear.bonus, lbsRequirement: lbsThisYear.requirement } : {}),
+      ...(cpfis.oa + cpfis.sa > 0 || yearCpfisIn > 0 ? { cpfisValue: Math.round(cpfis.oa + cpfis.sa), yearCpfisIn: Math.round(yearCpfisIn) } : {}),
+      ...(yearOaToRa > 0 ? { yearOaToRa: Math.round(yearOaToRa) } : {}),
       total: Math.round(oa + sa + ma + ra),
       propertyValue: Math.round(currentPropValue),
       privateAssets: Math.round(privateAssets),

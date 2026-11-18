@@ -166,7 +166,7 @@ export default function StudioApp() {
         )}
         {allowed && chapter === 'today' && <TodayChapter plan={base} answers={state.answers} onChange={update} sample={sample} onPick={pick} />}
         {allowed && chapter === 'building' && <BuildingChapter {...props} onFact={update} />}
-        {allowed && chapter === 'turning55' && <Turning55Chapter {...props} />}
+        {allowed && chapter === 'turning55' && <Turning55Chapter {...props} onFact={update} />}
         {allowed && chapter === 'family' && <FamilyChapter {...props} onFact={update} />}
         {allowed && chapter === 'home' && <HomeChapter {...props} onFact={update} />}
         {allowed && chapter === 'payout' && <PayoutChapter {...props} />}
