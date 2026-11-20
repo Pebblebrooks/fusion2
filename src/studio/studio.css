@@ -167,3 +167,11 @@
   .panel { break-inside: avoid; box-shadow: none; }
   .st-how, .st-sample { display: none !important; }
 }
+.st-about-btn { display: inline-flex; align-items: center; gap: 6px; }
+.st-about-btn svg { width: 18px; height: 18px; }
+.st-about h3 { margin: 18px 0 6px; font-size: 16px; }
+.st-about p { line-height: 1.55; margin: 0 0 8px; }
+.st-about-list { margin: 0 0 8px; padding-left: 20px; display: grid; gap: 6px; line-height: 1.5; }
+.st-about-ver { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--border); }
+@media (max-width: 900px) { .studio .header-actions .st-about-btn { display: inline-flex; padding: 0 10px; min-width: 44px; justify-content: center; } .st-about-btn span { display: none; } }
+@media print { .st-about-btn { display: none; } }

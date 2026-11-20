@@ -15,13 +15,14 @@ import { BuildingChapter, Turning55Chapter, PayoutChapter } from './Chapters.jsx
 import MyPlanChapter from './MyPlan.jsx';
 import { HomeChapter, LaterChapter, LegacyChapter } from './LaterChapters.jsx';
 import WhatIfPanel from './WhatIf.jsx';
+import AboutPanel from './About.jsx';
 import { DollarsContext } from './shared.jsx';
 import FamilyChapter from './Family.jsx';
 
 const MAX_MOVES = 20;
 
 /* ── Shell ───────────────────────────────────────────────────────────────── */
-function Header({ theme, onTheme, onWhatIf, future, onFuture }) {
+function Header({ theme, onTheme, onWhatIf, future, onFuture, onAbout }) {
   return (
     <header className="app-header">
       <div className="wrap">
@@ -36,6 +37,10 @@ function Header({ theme, onTheme, onWhatIf, future, onFuture }) {
             </div>
           )}
           {onWhatIf && <button type="button" className="btn btn-secondary" onClick={onWhatIf}>What if…</button>}
+          <button type="button" className="btn btn-ghost st-about-btn" onClick={onAbout} aria-label="About Fusion Studio">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5v.5" /></svg>
+            <span>About</span>
+          </button>
           <a className="btn btn-ghost st-back" href="/app/">Back to planner</a>
           <button type="button" className="icon-btn" onClick={onTheme} aria-label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}>
             {theme === 'dark'
@@ -142,6 +147,8 @@ export default function StudioApp() {
   const flip = () => { const m = theme === 'dark' ? 'light' : 'dark'; setTheme(m); setThemeState(m); };
   // What if panel: a suggestion opens its chapter with the change ready to save or undo.
   const [whatIfOpen, setWhatIfOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const closeAbout = useCallback(() => setAboutOpen(false), []);
   const [future, setFuture] = useState(() => { try { return localStorage.getItem('fusion_studio_dollars') === 'future'; } catch { return false; } });
   const pickDollars = (f) => { setFuture(f); try { localStorage.setItem('fusion_studio_dollars', f ? 'future' : 'today'); } catch { /* not kept */ } };
   const dollars = useMemo(() => ({ future, inflation: plan.assumptions.inflation, age: plan.age, birthYear: plan.answers.birthYear }), [future, plan]);
@@ -153,7 +160,7 @@ export default function StudioApp() {
   return (
     <div className="app studio">
       <a className="skip-link" href="#st-main">Skip to content</a>
-      <Header theme={theme} onTheme={flip} onWhatIf={allowed ? () => setWhatIfOpen(true) : null} future={future} onFuture={allowed ? pickDollars : null} />
+      <Header theme={theme} onTheme={flip} onWhatIf={allowed ? () => setWhatIfOpen(true) : null} future={future} onFuture={allowed ? pickDollars : null} onAbout={() => setAboutOpen(true)} />
       {allowed && <Journey plan={base} current={chapter} onPick={pick} />}
       <DollarsContext.Provider value={dollars}>
       <main id="st-main" className="wrap st-main">
@@ -175,6 +182,7 @@ export default function StudioApp() {
         {allowed && chapter === 'plan' && <MyPlanChapter plan={base} moves={studio.moves} now={now} onUndo={undo} onRemove={remove} onPick={pick} sample={sample} />}
       </main>
       </DollarsContext.Provider>
+      {aboutOpen && <AboutPanel onClose={closeAbout} />}
       {allowed && whatIfOpen && <WhatIfPanel answers={state.answers} now={now} onTry={tryIt} onClose={closeWhatIf} />}
       <footer className="wrap st-foot small muted">Fusion 富生 Studio {VERSION_LABEL}</footer>
     </div>

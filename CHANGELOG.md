@@ -6,6 +6,10 @@ together with the commit that was built. `tests/version.test.js` fails if the tw
 
 Version numbers: first number for a redesign, second for new features, third for fixes.
 
+## 4.1.0 — 21 Nov 2026
+Minor version: new feature, no change to results.
+- **About** in Studio's top bar (an "i" icon on phones), on every screen including before sign-in: what Studio is, how facts, choices, moves, What if and the dollars switch work, where your plan is kept (this browser only), the official sources and the CPF rules date, the version, and that it is not financial advice.
+
 ## 4.0.0 — 18 Nov 2026
 Major version: CPF engine results change for some plans. Owner-approved on 18 Nov 2026 after checking HDB and CPF Board publications (CPF compliance register, corrections 22–28). CPF rules version raised to 2026-11-18, so adviser reviews flag reports made before it.
 
